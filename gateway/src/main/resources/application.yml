@@ -1,0 +1,44 @@
+server:
+  port: 8081   # порт, на котором висит Gateway
+
+spring:
+  application:
+    name: gateway-service
+  cloud:
+    gateway:
+      routes:
+        # Маршрут для Accounts
+        - id: account-service
+          uri: http://localhost:8082   # прямой адрес Accounts
+          predicates:
+            - Path=/api/accounts/**
+          filters:
+            - StripPrefix=0
+            -
+        # Маршрут для Cash
+        - id: cash-service
+          uri: http://localhost:8083
+          predicates:
+            - Path=/api/cash/**
+          filters:
+            - StripPrefix=0
+
+        # Маршрут для Transfer
+        - id: transfer-service
+          uri: http://localhost:8084
+          predicates:
+            - Path=/api/transfer/**
+          filters:
+            - StripPrefix=0
+
+        # уведомления через Gateway
+        - id: notifications-service
+          uri: http://localhost:8085
+          predicates:
+            - Path=/api/notifications/**
+          filters:
+            - StripPrefix=0
+logging:
+  level:
+    org.springframework.cloud.gateway: DEBUG
+    org.springframework.http.server.reactive: DEBUG

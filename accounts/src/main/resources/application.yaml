@@ -1,0 +1,48 @@
+server:
+  port: 8082
+
+spring:
+  application:
+    name: accounts-service
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:/schema.sql
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/accounts_db
+    username: postgres
+    password: postgres
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: http://localhost:8080/auth/realms/myrealm   # URL Keycloak
+      client:
+        registration:
+          notification-client:
+            client-id: accounts-client
+            client-secret: your-client-secret
+            authorization-grant-type: client_credentials
+            scope: notification
+        provider:
+          notification-client:
+            token-uri: http://localhost:8080/auth/realms/myrealm/protocol/openid-connect/token
+
+notification:
+  service:
+    url: http://localhost:8081
+
+logging:
+  level:
+    org.springframework.security: DEBUG

@@ -1,0 +1,23 @@
+server:
+  port: 8080
+
+gateway:
+  url: http://localhost:8081   # адрес Gateway API
+
+spring:
+  security:
+    oauth2:
+      client:
+        registration:
+          keycloak:
+            client-id: front-client
+            client-secret: your-client-secret
+            scope: openid, profile, email
+            authorization-grant-type: authorization_code
+            redirect-uri: "{baseUrl}/login/oauth2/code/{registrationId}"
+        provider:
+          keycloak:
+            issuer-uri: http://localhost:8080/auth/realms/myrealm   # URL Keycloak
+
+  thymeleaf:
+    cache: false

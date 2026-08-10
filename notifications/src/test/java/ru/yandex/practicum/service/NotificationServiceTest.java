@@ -1,0 +1,18 @@
+package ru.yandex.practicum.service;
+
+import org.junit.jupiter.api.Test;
+import ru.yandex.practicum.dto.NotificationRequest;
+
+import static org.assertj.core.api.Assertions.assertThatCode;
+
+class NotificationServiceTest {
+
+    private final NotificationService notificationService = new NotificationService();
+
+    @Test
+    void sendNotification_shouldNotThrowException() {
+        NotificationRequest request = new NotificationRequest("testuser", "Test message");
+        assertThatCode(() -> notificationService.sendNotification(request))
+                .doesNotThrowAnyException();
+    }
+}
