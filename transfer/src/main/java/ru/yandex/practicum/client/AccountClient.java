@@ -2,6 +2,7 @@ package ru.yandex.practicum.client;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.security.oauth2.client.web.reactive.function.client.ServletOAuth2AuthorizedClientExchangeFilterFunction;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -36,7 +37,7 @@ public class AccountClient {
                         .build())
                 .header(HttpHeaders.CONTENT_TYPE, "application/json")
                 .retrieve()
-                .onStatus(status -> status.isError(), response ->
+                .onStatus(HttpStatusCode::isError, response ->
                         response.bodyToMono(String.class)
                                 .flatMap(error -> Mono.error(new RuntimeException("Ошибка Accounts: " + error)))
                 )

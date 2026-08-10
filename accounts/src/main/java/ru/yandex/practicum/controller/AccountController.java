@@ -70,7 +70,6 @@ public class AccountController {
             }
             return login;
         }
-        // fallback для тестов и других случаев
         return authentication.getName();
     }
 }

@@ -28,7 +28,6 @@ public class TransferService {
      * @return обновлённые данные отправителя (баланс после списания)
      */
     public AccountInfoDto transfer(String fromLogin, String toLogin, int amount) {
-        // 1. Валидация
         if (amount <= 0) {
             throw new IllegalArgumentException("Сумма перевода должна быть положительной");
         }
@@ -36,7 +35,6 @@ public class TransferService {
             throw new IllegalArgumentException("Нельзя перевести деньги самому себе");
         }
 
-        // 2. Снятие со счёта отправителя
         AccountInfoDto senderAfterWithdraw;
         try {
             senderAfterWithdraw = accountClient.changeBalance(fromLogin, -amount);
@@ -45,7 +43,6 @@ public class TransferService {
             throw new RuntimeException("Ошибка при списании со счёта отправителя: " + e.getMessage(), e);
         }
 
-        // 3. Зачисление получателю
         try {
             accountClient.changeBalance(toLogin, amount);
             log.info("Зачислено {} на счёт {}", amount, toLogin);
@@ -61,7 +58,6 @@ public class TransferService {
             throw new RuntimeException("Перевод не выполнен: ошибка при зачислении получателю", e);
         }
 
-        // 4. Отправка уведомлений
         try {
             notificationClient.sendNotification(fromLogin, "Вы перевели " + amount + " пользователю " + toLogin +
                     ". Новый баланс: " + senderAfterWithdraw.getBalance());

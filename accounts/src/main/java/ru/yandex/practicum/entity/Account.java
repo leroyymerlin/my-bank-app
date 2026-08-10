@@ -30,6 +30,4 @@ public class Account {
     @Column(nullable = false)
     private int balance;
 
-    public Account(String login, String name, LocalDate birthdate, int balance) {
-    }
 }
