@@ -26,7 +26,7 @@ public class SecurityConfig {
 
         http
                 .authorizeHttpRequests(authz -> authz
-                        .requestMatchers("/api/accounts/balance").hasAuthority("ROLE_INTERNAL")
+                        .requestMatchers("/api/accounts/balance").hasAuthority("SCOPE_internal")
                         .anyRequest().authenticated()
                 )
                 .oauth2ResourceServer(oauth2 -> oauth2

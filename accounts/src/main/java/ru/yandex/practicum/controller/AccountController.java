@@ -3,16 +3,19 @@ package ru.yandex.practicum.controller;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import ru.yandex.practicum.dto.AccountDto;
 import ru.yandex.practicum.dto.AccountInfoDto;
 import ru.yandex.practicum.dto.UpdateAccountRequest;
 import ru.yandex.practicum.service.AccountService;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 @RestController
 @RequestMapping("/api/accounts")
+@Validated
 public class AccountController {
 
     private final AccountService accountService;
@@ -55,7 +58,7 @@ public class AccountController {
      */
     @PostMapping("/balance")
     @ResponseStatus(HttpStatus.OK)
-    public AccountInfoDto changeBalance(@RequestParam String login, @RequestParam int delta) {
+    public AccountInfoDto changeBalance(@RequestParam String login, @RequestParam BigDecimal delta) {
         return accountService.updateBalance(login, delta);
     }
 

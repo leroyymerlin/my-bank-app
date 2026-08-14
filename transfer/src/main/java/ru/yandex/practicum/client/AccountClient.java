@@ -9,6 +9,8 @@ import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 import ru.yandex.practicum.dto.AccountInfoDto;
 
+import java.math.BigDecimal;
+
 @Component
 public class AccountClient {
 
@@ -18,8 +20,7 @@ public class AccountClient {
                          @Value("${account.service.url}") String accountServiceUrl) {
         this.webClient = webClientBuilder
                 .baseUrl(accountServiceUrl)
-                .filter(new ServletOAuth2AuthorizedClientExchangeFilterFunction())
-                .build();
+                 .build();
     }
 
     /**
@@ -28,7 +29,7 @@ public class AccountClient {
      * @param delta изменение (может быть отрицательным)
      * @return обновлённые данные аккаунта
      */
-    public AccountInfoDto changeBalance(String login, int delta) {
+    public AccountInfoDto changeBalance(String login, BigDecimal delta) {
         return webClient.post()
                 .uri(uriBuilder -> uriBuilder
                         .path("/api/accounts/balance")

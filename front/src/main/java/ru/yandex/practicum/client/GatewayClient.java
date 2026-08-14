@@ -1,34 +1,53 @@
 package ru.yandex.practicum.client;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.oauth2.client.OAuth2AuthorizedClient;
+import org.springframework.security.oauth2.client.OAuth2AuthorizedClientService;
 import org.springframework.security.oauth2.client.authentication.OAuth2AuthenticationToken;
 import org.springframework.stereotype.Component;
-import org.springframework.web.reactive.function.client.WebClient;
-import reactor.core.publisher.Mono;
+import org.springframework.web.client.RestClient;
 import ru.yandex.practicum.model.AccountDto;
 import ru.yandex.practicum.model.AccountInfo;
 import ru.yandex.practicum.model.CashAction;
 
 import java.time.LocalDate;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
 @Component
 public class GatewayClient {
 
-    private final WebClient webClient;
+    private final RestClient restClient;
+    private final OAuth2AuthorizedClientService authorizedClientService;
 
-    public GatewayClient(WebClient.Builder webClientBuilder,
-                         @Value("${gateway.url}") String gatewayUrl) {
-        this.webClient = webClientBuilder.baseUrl(gatewayUrl).build();
+    protected RestClient getRestClient() {
+        return restClient;
+    }
+
+    public GatewayClient(RestClient.Builder restClientBuilder,
+                         @Value("${gateway.url}") String gatewayUrl,
+                         OAuth2AuthorizedClientService authorizedClientService) {
+        this.restClient = restClientBuilder.baseUrl(gatewayUrl).build();
+        this.authorizedClientService = authorizedClientService;
     }
 
     private String extractToken(Authentication auth) {
         if (auth instanceof OAuth2AuthenticationToken token) {
-            return token.getName();
+            String registrationId = token.getAuthorizedClientRegistrationId();
+            String userName = token.getName();
+
+            OAuth2AuthorizedClient authorizedClient = authorizedClientService.loadAuthorizedClient(
+                    registrationId, userName
+            );
+
+            if (authorizedClient == null) {
+                throw new IllegalStateException("No authorized client found for user: " + userName);
+            }
+
+            return authorizedClient.getAccessToken().getTokenValue();
         }
         throw new IllegalStateException("Authentication is not OAuth2");
     }
@@ -38,16 +57,14 @@ public class GatewayClient {
      */
     public AccountInfo getCurrentAccount(Authentication auth) {
         String token = extractToken(auth);
-        return webClient.get()
+        return restClient.get()
                 .uri("/api/accounts/current")
                 .header("Authorization", "Bearer " + token)
                 .retrieve()
-                .onStatus(HttpStatusCode::isError, response ->
-                        response.bodyToMono(String.class)
-                                .flatMap(error -> Mono.error(new RuntimeException("Ошибка получения аккаунта: " + error)))
-                )
-                .bodyToMono(AccountInfo.class)
-                .block();
+                .onStatus(HttpStatusCode::isError, (request, response) -> {
+                    throw new RuntimeException("Ошибка получения аккаунта: " + response.getBody());
+                })
+                .body(AccountInfo.class);
     }
 
     /**
@@ -55,17 +72,15 @@ public class GatewayClient {
      */
     public List<AccountDto> getAccounts(Authentication auth) {
         String token = extractToken(auth);
-        AccountDto[] accounts = webClient.get()
+        AccountDto[] accounts = restClient.get()
                 .uri("/api/accounts")
                 .header("Authorization", "Bearer " + token)
                 .retrieve()
-                .onStatus(HttpStatusCode::isError, response ->
-                        response.bodyToMono(String.class)
-                                .flatMap(error -> Mono.error(new RuntimeException("Ошибка получения списка аккаунтов: " + error)))
-                )
-                .bodyToMono(AccountDto[].class)
-                .block();
-        return accounts != null ? Arrays.asList(accounts) : List.of();
+                .onStatus(HttpStatusCode::isError, (request, response) -> {
+                    throw new RuntimeException("Ошибка получения списка аккаунтов: " + response.getBody());
+                })
+                .body(new ParameterizedTypeReference<AccountDto[]>() {});
+        return accounts != null ? List.of(accounts) : List.of();
     }
 
     /**
@@ -77,17 +92,15 @@ public class GatewayClient {
                 "name", name,
                 "birthdate", birthdate.toString()
         );
-        return webClient.post()
+        return restClient.post()
                 .uri("/api/accounts/update")
                 .header("Authorization", "Bearer " + token)
-                .bodyValue(body)
+                .body(body)
                 .retrieve()
-                .onStatus(HttpStatusCode::isError, response ->
-                        response.bodyToMono(String.class)
-                                .flatMap(error -> Mono.error(new RuntimeException("Ошибка обновления данных: " + error)))
-                )
-                .bodyToMono(AccountInfo.class)
-                .block();
+                .onStatus(HttpStatusCode::isError, (request, response) -> {
+                    throw new RuntimeException("Ошибка обновления данных: " + response.getBody());
+                })
+                .body(AccountInfo.class);
     }
 
     /**
@@ -99,17 +112,15 @@ public class GatewayClient {
                 "amount", amount,
                 "action", action.name()
         );
-        return webClient.post()
+        return restClient.post()
                 .uri("/api/cash")
                 .header("Authorization", "Bearer " + token)
-                .bodyValue(body)
+                .body(body)
                 .retrieve()
-                .onStatus(HttpStatusCode::isError, response ->
-                        response.bodyToMono(String.class)
-                                .flatMap(error -> Mono.error(new RuntimeException("Ошибка операции с деньгами: " + error)))
-                )
-                .bodyToMono(AccountInfo.class)
-                .block();
+                .onStatus(HttpStatusCode::isError, (request, response) -> {
+                    throw new RuntimeException("Ошибка операции с деньгами: " + response.getBody());
+                })
+                .body(AccountInfo.class);
     }
 
     /**
@@ -121,16 +132,14 @@ public class GatewayClient {
                 "amount", amount,
                 "toLogin", toLogin
         );
-        return webClient.post()
+        return restClient.post()
                 .uri("/api/transfer")
                 .header("Authorization", "Bearer " + token)
-                .bodyValue(body)
+                .body(body)
                 .retrieve()
-                .onStatus(HttpStatusCode::isError, response ->
-                        response.bodyToMono(String.class)
-                                .flatMap(error -> Mono.error(new RuntimeException("Ошибка перевода: " + error)))
-                )
-                .bodyToMono(AccountInfo.class)
-                .block();
+                .onStatus(HttpStatusCode::isError, (request, response) -> {
+                    throw new RuntimeException("Ошибка перевода: " + response.getBody());
+                })
+                .body(AccountInfo.class);
     }
 }

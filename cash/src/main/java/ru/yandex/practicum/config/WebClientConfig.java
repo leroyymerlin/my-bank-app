@@ -13,7 +13,7 @@ public class WebClientConfig {
     public WebClient.Builder webClientBuilder(OAuth2AuthorizedClientManager authorizedClientManager) {
         ServletOAuth2AuthorizedClientExchangeFilterFunction oauth2Filter =
                 new ServletOAuth2AuthorizedClientExchangeFilterFunction(authorizedClientManager);
-        oauth2Filter.setDefaultClientRegistrationId("cash-client"); // регистрация в OAuth2
+        oauth2Filter.setDefaultClientRegistrationId("cash-client");
 
         return WebClient.builder()
                 .filter(oauth2Filter);

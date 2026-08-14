@@ -1,9 +1,12 @@
 package ru.yandex.practicum.dto;
 
+import jakarta.validation.constraints.DecimalMin;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+
+import java.math.BigDecimal;
 
 @Getter
 @Setter
@@ -13,5 +16,7 @@ public class AccountInfoDto {
 
     private String name;
     private String birthdate;
-    private int balance;
+
+    @DecimalMin(value = "0.00", message = "Баланс не может быть отрицательным")
+    private BigDecimal balance;
 }

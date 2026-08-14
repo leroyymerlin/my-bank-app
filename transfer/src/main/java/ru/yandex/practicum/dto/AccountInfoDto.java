@@ -5,6 +5,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.math.BigDecimal;
+
 @Setter
 @Getter
 @AllArgsConstructor
@@ -13,5 +15,5 @@ public class AccountInfoDto {
 
     private String name;
     private String birthdate;
-    private int balance;
+    private BigDecimal balance;
 }

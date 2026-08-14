@@ -3,7 +3,8 @@ CREATE TABLE IF NOT EXISTS accounts (
     login VARCHAR(255) NOT NULL UNIQUE,
     name VARCHAR(255) NOT NULL,
     birthdate DATE NOT NULL,
-    balance INT NOT NULL
+    balance INT NOT NULL,
+    version INT NOT NULL
 );
 
 COMMENT ON TABLE accounts IS 'Таблица аккаунтов пользователей';
@@ -12,3 +13,4 @@ COMMENT ON COLUMN accounts.login IS 'Логин пользователя (уни
 COMMENT ON COLUMN accounts.name IS 'Фамилия и имя пользователя';
 COMMENT ON COLUMN accounts.birthdate IS 'Дата рождения в формате YYYY-MM-DD';
 COMMENT ON COLUMN accounts.balance IS 'Текущий баланс счёта в виртуальных деньгах';
+COMMENT ON COLUMN accounts.ve rsion IS 'Версия для оптимистической блокировки';

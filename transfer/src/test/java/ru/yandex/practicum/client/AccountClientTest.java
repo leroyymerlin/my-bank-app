@@ -8,6 +8,8 @@ import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 import ru.yandex.practicum.dto.AccountInfoDto;
 
+import java.math.BigDecimal;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -32,13 +34,13 @@ class AccountClientTest {
 
         AccountInfoDto result = getAccountInfoDto(webClient);
         assertThat(result.getName()).isEqualTo("Test");
-        assertThat(result.getBalance()).isEqualTo(1500);
+        assertThat(result.getBalance()).isEqualByComparingTo(new BigDecimal("1500.00"));
     }
 
     private static AccountInfoDto getAccountInfoDto(WebClient webClient) {
         AccountClient client = new AccountClient(WebClient.builder(), "http://localhost:8080") {
             @Override
-            public AccountInfoDto changeBalance(String login, int delta) {
+            public AccountInfoDto changeBalance(String login, BigDecimal delta) {
                 return webClient.post()
                         .uri(uriBuilder -> uriBuilder
                                 .path("/api/accounts/balance")
@@ -56,7 +58,7 @@ class AccountClientTest {
             }
         };
 
-        return client.changeBalance("testuser", 500);
+        return client.changeBalance("testuser", new BigDecimal("500"));
     }
 
 }

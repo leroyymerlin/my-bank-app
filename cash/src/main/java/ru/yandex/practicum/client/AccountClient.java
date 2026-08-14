@@ -3,11 +3,12 @@ package ru.yandex.practicum.client;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatusCode;
-import org.springframework.security.oauth2.client.web.reactive.function.client.ServletOAuth2AuthorizedClientExchangeFilterFunction;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 import ru.yandex.practicum.dto.AccountInfoDto;
+
+import java.math.BigDecimal;
 
 @Component
 public class AccountClient {
@@ -18,7 +19,6 @@ public class AccountClient {
                          @Value("${account.service.url}") String accountServiceUrl) {
         this.webClient = webClientBuilder
                 .baseUrl(accountServiceUrl)
-                .filter(new ServletOAuth2AuthorizedClientExchangeFilterFunction())
                 .build();
     }
 
@@ -28,7 +28,7 @@ public class AccountClient {
      * @param delta изменение (может быть отрицательным)
      * @return обновлённые данные аккаунта
      */
-    public AccountInfoDto changeBalance(String login, int delta) {
+    public AccountInfoDto changeBalance(String login, BigDecimal delta) {
         return webClient.post()
                 .uri(uriBuilder -> uriBuilder
                         .path("/api/accounts/balance")

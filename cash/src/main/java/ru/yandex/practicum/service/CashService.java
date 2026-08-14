@@ -6,6 +6,8 @@ import ru.yandex.practicum.client.NotificationClient;
 import ru.yandex.practicum.dto.AccountInfoDto;
 import ru.yandex.practicum.model.CashAction;
 
+import java.math.BigDecimal;
+
 @Service
 public class CashService {
 
@@ -24,12 +26,12 @@ public class CashService {
      * @param action  PUT или GET
      * @return обновлённые данные аккаунта
      */
-    public AccountInfoDto processCash(String login, int amount, CashAction action) {
-        if (amount <= 0) {
+    public AccountInfoDto processCash(String login, BigDecimal amount, CashAction action) {
+        if (amount.compareTo(BigDecimal.ZERO) <= 0) {
             throw new IllegalArgumentException("Сумма должна быть положительной");
         }
 
-        int delta = (action == CashAction.PUT) ? amount : -amount;
+        BigDecimal delta = (action == CashAction.PUT) ? amount : amount.negate();
 
         AccountInfoDto updatedAccount;
         try {
@@ -39,8 +41,10 @@ public class CashService {
         }
 
         String message = (action == CashAction.PUT)
-                ? "Ваш счёт пополнен на " + amount + ". Текущий баланс: " + updatedAccount.getBalance()
-                : "Со счёта снято " + amount + ". Текущий баланс: " + updatedAccount.getBalance();
+                ? "Ваш счёт пополнен на " + amount.setScale(2, BigDecimal.ROUND_HALF_UP) +
+                        ". Текущий баланс: " + updatedAccount.getBalance().setScale(2, BigDecimal.ROUND_HALF_UP)
+                : "Со счёта снято " + amount.setScale(2, BigDecimal.ROUND_HALF_UP) +
+                        ". Текущий баланс: " + updatedAccount.getBalance().setScale(2, BigDecimal.ROUND_HALF_UP);
         notificationClient.sendNotification(login, message);
 
         return updatedAccount;

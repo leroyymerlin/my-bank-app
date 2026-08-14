@@ -12,6 +12,7 @@ import ru.yandex.practicum.entity.Account;
 import ru.yandex.practicum.exception.AccountNotFoundException;
 import ru.yandex.practicum.repository.AccountRepository;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -29,7 +30,7 @@ class AccountServiceTest {
     private static final String TEST_LOGIN = "testuser";
     private static final String TEST_NAME = "Иванов Иван";
     private static final LocalDate TEST_BIRTHDATE = LocalDate.of(1990, 1, 1);
-    private static final int TEST_BALANCE = 1000;
+    private static final BigDecimal TEST_BALANCE = new BigDecimal("1000.00");
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE;
 
     @Mock
@@ -42,7 +43,14 @@ class AccountServiceTest {
     private AccountService accountService;
 
     private Account createTestAccount() {
-        return new Account(1L, TEST_LOGIN, TEST_NAME, TEST_BIRTHDATE, TEST_BALANCE);
+        return Account.builder()
+                .id(1L)
+                .login(TEST_LOGIN)
+                .name(TEST_NAME)
+                .birthdate(TEST_BIRTHDATE)
+                .balance(TEST_BALANCE)
+                .version(1L)
+                .build();
     }
 
     @Test
@@ -73,8 +81,8 @@ class AccountServiceTest {
 
     @Test
     void getAllAccounts_shouldReturnListOfAccountDtos() {
-        Account account1 = new Account(1L, "user1", "Петров Пётр", LocalDate.of(1985, 5, 15), 500);
-        Account account2 = new Account(1L, "user2", "Сидоров Сидор", LocalDate.of(1995, 3, 10), 200);
+        Account account1 = Account.builder().id(1L).login("user1").name("Петров Пётр").birthdate(LocalDate.of(1985, 5, 15)).balance(new BigDecimal("500.00")).version(1L).build();
+        Account account2 = Account.builder().id(1L).login("user2").name("Сидоров Сидор").birthdate(LocalDate.of(1995, 3, 10)).balance(new BigDecimal("200.00")).version(1L).build();
         when(accountRepository.findAll()).thenReturn(List.of(account1, account2));
 
         List<AccountDto> result = accountService.getAllAccounts();
@@ -156,45 +164,47 @@ class AccountServiceTest {
     @Test
     void updateBalance_shouldIncreaseBalance_whenDeltaPositive() {
         Account account = createTestAccount();
-        int delta = 500;
-        int expectedBalance = TEST_BALANCE + delta;
+        BigDecimal delta = new BigDecimal("500");
+        BigDecimal expectedBalance = TEST_BALANCE.add(delta);
 
         when(accountRepository.findByLogin(TEST_LOGIN)).thenReturn(Optional.of(account));
         when(accountRepository.save(any(Account.class))).thenReturn(account);
 
         AccountInfoDto result = accountService.updateBalance(TEST_LOGIN, delta);
 
-        assertThat(result.getBalance()).isEqualTo(expectedBalance);
-        assertThat(account.getBalance()).isEqualTo(expectedBalance);
+        assertThat(result.getBalance()).isEqualByComparingTo(expectedBalance);
+        assertThat(account.getBalance()).isEqualByComparingTo(expectedBalance);
 
         verify(accountRepository, times(1)).findByLogin(TEST_LOGIN);
         verify(accountRepository, times(1)).save(account);
         verify(notificationClient, times(1))
-                .sendNotification(TEST_LOGIN, "Ваш баланс изменён на " + delta + ". Новый баланс: " + expectedBalance);
+                .sendNotification(TEST_LOGIN, "Ваш баланс изменён на " + delta.setScale(2, BigDecimal.ROUND_HALF_UP) +
+                        ". Новый баланс: " + expectedBalance.setScale(2, BigDecimal.ROUND_HALF_UP));
     }
 
     @Test
     void updateBalance_shouldDecreaseBalance_whenDeltaNegativeAndSufficientFunds() {
         Account account = createTestAccount();
-        int delta = -300;
-        int expectedBalance = TEST_BALANCE + delta;
+        BigDecimal delta = new BigDecimal("-300");
+        BigDecimal expectedBalance = TEST_BALANCE.add(delta);
 
         when(accountRepository.findByLogin(TEST_LOGIN)).thenReturn(Optional.of(account));
         when(accountRepository.save(any(Account.class))).thenReturn(account);
 
         AccountInfoDto result = accountService.updateBalance(TEST_LOGIN, delta);
 
-        assertThat(result.getBalance()).isEqualTo(expectedBalance);
-        assertThat(account.getBalance()).isEqualTo(expectedBalance);
+        assertThat(result.getBalance()).isEqualByComparingTo(expectedBalance);
+        assertThat(account.getBalance()).isEqualByComparingTo(expectedBalance);
 
         verify(notificationClient, times(1))
-                .sendNotification(TEST_LOGIN, "Ваш баланс изменён на " + delta + ". Новый баланс: " + expectedBalance);
+                .sendNotification(TEST_LOGIN, "Ваш баланс изменён на " + delta.setScale(2, BigDecimal.ROUND_HALF_UP) +
+                        ". Новый баланс: " + expectedBalance.setScale(2, BigDecimal.ROUND_HALF_UP));
     }
 
     @Test
     void updateBalance_shouldThrowIllegalArgumentException_whenInsufficientFunds() {
         Account account = createTestAccount();
-        int delta = -2000;
+        BigDecimal delta = new BigDecimal("-2000");
         when(accountRepository.findByLogin(TEST_LOGIN)).thenReturn(Optional.of(account));
 
         assertThatThrownBy(() -> accountService.updateBalance(TEST_LOGIN, delta))
@@ -211,7 +221,7 @@ class AccountServiceTest {
     void updateBalance_shouldThrowAccountNotFoundException_whenAccountNotFound() {
         when(accountRepository.findByLogin(TEST_LOGIN)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> accountService.updateBalance(TEST_LOGIN, 100))
+        assertThatThrownBy(() -> accountService.updateBalance(TEST_LOGIN, new BigDecimal("100")))
                 .isInstanceOf(AccountNotFoundException.class)
                 .hasMessage("Аккаунт не найден: " + TEST_LOGIN);
 

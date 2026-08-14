@@ -14,6 +14,7 @@ import org.springframework.web.util.UriBuilder;
 import reactor.core.publisher.Mono;
 import ru.yandex.practicum.dto.AccountInfoDto;
 
+import java.math.BigDecimal;
 import java.net.URI;
 import java.util.function.Function;
 
@@ -49,7 +50,6 @@ class AccountClientTest {
     @BeforeEach
     void setUp() {
         when(webClientBuilder.baseUrl(anyString())).thenReturn(webClientBuilder);
-        when(webClientBuilder.filter(any())).thenReturn(webClientBuilder);
         when(webClientBuilder.build()).thenReturn(webClient);
 
         accountClient = new AccountClient(webClientBuilder, "http://localhost:8080");
@@ -57,7 +57,7 @@ class AccountClientTest {
 
     @Test
     void changeBalance_shouldReturnAccountInfo_onSuccess() {
-        AccountInfoDto expected = new AccountInfoDto("Иванов Иван", "1990-01-01", 1500);
+        AccountInfoDto expected = new AccountInfoDto("Иванов Иван", "1990-01-01", new BigDecimal("1500.00"));
 
         when(webClient.post()).thenReturn(requestBodyUriSpec);
         when(requestBodyUriSpec.uri((Function<UriBuilder, URI>) any())).thenReturn(requestBodySpec);
@@ -66,12 +66,12 @@ class AccountClientTest {
         when(responseSpec.onStatus(any(), any())).thenReturn(responseSpec);
         when(responseSpec.bodyToMono(AccountInfoDto.class)).thenReturn(Mono.just(expected));
 
-        AccountInfoDto result = accountClient.changeBalance("testuser", 500);
+        AccountInfoDto result = accountClient.changeBalance("testuser", new BigDecimal("500"));
 
         assertThat(result).isNotNull();
         assertThat(result.getName()).isEqualTo("Иванов Иван");
         assertThat(result.getBirthdate()).isEqualTo("1990-01-01");
-        assertThat(result.getBalance()).isEqualTo(1500);
+        assertThat(result.getBalance()).isEqualByComparingTo(new BigDecimal("1500.00"));
     }
 
     @Test
@@ -84,7 +84,7 @@ class AccountClientTest {
         when(responseSpec.bodyToMono(AccountInfoDto.class))
                 .thenReturn(Mono.error(new RuntimeException("Service error")));
 
-        assertThatThrownBy(() -> accountClient.changeBalance("testuser", 100))
+        assertThatThrownBy(() -> accountClient.changeBalance("testuser", new BigDecimal("100")))
                 .isInstanceOf(RuntimeException.class)
                 .hasMessageContaining("Service error");
     }

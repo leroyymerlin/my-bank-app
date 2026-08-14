@@ -10,9 +10,11 @@ import ru.yandex.practicum.client.NotificationClient;
 import ru.yandex.practicum.dto.AccountInfoDto;
 import ru.yandex.practicum.model.CashAction;
 
+import java.math.BigDecimal;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
@@ -29,13 +31,14 @@ class CashServiceTest {
     private CashService cashService;
 
     private static final String TEST_LOGIN = "testuser";
-    private static final int TEST_AMOUNT = 500;
-    private static final int TEST_BALANCE = 1000;
+    private static final BigDecimal TEST_AMOUNT = new BigDecimal("500.00");
+    private static final BigDecimal TEST_BALANCE = new BigDecimal("1000.00");
 
     @Test
     void processCash_shouldIncreaseBalance_andSendNotification_onPut() {
-        int delta = TEST_AMOUNT;
-        AccountInfoDto expected = new AccountInfoDto("Иванов Иван", "1990-01-01", TEST_BALANCE + delta);
+        BigDecimal delta = new BigDecimal("500.00");
+        BigDecimal expectedBalance = TEST_BALANCE.add(delta);
+        AccountInfoDto expected = new AccountInfoDto("Иванов Иван", "1990-01-01", expectedBalance);
         when(accountClient.changeBalance(TEST_LOGIN, delta)).thenReturn(expected);
 
         AccountInfoDto result = cashService.processCash(TEST_LOGIN, TEST_AMOUNT, CashAction.PUT);
@@ -43,13 +46,14 @@ class CashServiceTest {
         assertThat(result).isEqualTo(expected);
         verify(accountClient).changeBalance(TEST_LOGIN, delta);
         verify(notificationClient).sendNotification(TEST_LOGIN,
-                "Ваш счёт пополнен на " + TEST_AMOUNT + ". Текущий баланс: " + expected.getBalance());
+                "Ваш счёт пополнен на " + delta + ". Текущий баланс: " + expectedBalance.setScale(2, BigDecimal.ROUND_HALF_UP));
     }
 
     @Test
     void processCash_shouldDecreaseBalance_andSendNotification_onGet() {
-        int delta = -TEST_AMOUNT;
-        AccountInfoDto expected = new AccountInfoDto("Иванов Иван", "1990-01-01", TEST_BALANCE + delta);
+        BigDecimal delta = new BigDecimal("-500.00");
+        BigDecimal expectedBalance = TEST_BALANCE.add(delta);
+        AccountInfoDto expected = new AccountInfoDto("Иванов Иван", "1990-01-01", expectedBalance);
         when(accountClient.changeBalance(TEST_LOGIN, delta)).thenReturn(expected);
 
         AccountInfoDto result = cashService.processCash(TEST_LOGIN, TEST_AMOUNT, CashAction.GET);
@@ -57,16 +61,17 @@ class CashServiceTest {
         assertThat(result).isEqualTo(expected);
         verify(accountClient).changeBalance(TEST_LOGIN, delta);
         verify(notificationClient).sendNotification(TEST_LOGIN,
-                "Со счёта снято " + TEST_AMOUNT + ". Текущий баланс: " + expected.getBalance());
+                "Со счёта снято " + TEST_AMOUNT.setScale(2, BigDecimal.ROUND_HALF_UP) +
+                        ". Текущий баланс: " + expectedBalance.setScale(2, BigDecimal.ROUND_HALF_UP));
     }
 
     @Test
     void processCash_shouldThrowException_whenAmountIsZeroOrNegative() {
-        assertThatThrownBy(() -> cashService.processCash(TEST_LOGIN, 0, CashAction.PUT))
+        assertThatThrownBy(() -> cashService.processCash(TEST_LOGIN, BigDecimal.valueOf(0), CashAction.PUT))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("Сумма должна быть положительной");
 
-        assertThatThrownBy(() -> cashService.processCash(TEST_LOGIN, -100, CashAction.GET))
+        assertThatThrownBy(() -> cashService.processCash(TEST_LOGIN, BigDecimal.valueOf(-100), CashAction.GET))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("Сумма должна быть положительной");
 
@@ -77,7 +82,7 @@ class CashServiceTest {
     @Test
     void processCash_shouldThrowRuntimeException_whenAccountClientFails() {
         RuntimeException clientException = new RuntimeException("Service error");
-        when(accountClient.changeBalance(anyString(), anyInt())).thenThrow(clientException);
+        when(accountClient.changeBalance(anyString(), any())).thenThrow(clientException);
 
         assertThatThrownBy(() -> cashService.processCash(TEST_LOGIN, TEST_AMOUNT, CashAction.PUT))
                 .isInstanceOf(RuntimeException.class)
