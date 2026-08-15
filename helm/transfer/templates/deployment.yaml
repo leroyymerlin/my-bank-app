@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-transfer
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: transfer
+spec:
+  replicas: {{ .Values.transfer.replicaCount }}
+  selector:
+    matchLabels:
+      app: transfer
+  template:
+    metadata:
+      labels:
+        app: transfer
+    spec:
+      containers:
+        - name: transfer
+          image: "my-bank-app/transfer:latest"
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          ports:
+            - containerPort: 8084
+          resources:
+            {{- toYaml .Values.transfer.resources | nindent 12 }}
+          env:
+            - name: SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI
+              value: http://{{ .Release.Name }}-keycloak:8080/realms/myrealm
+            - name: ACCOUNT_SERVICE_URL
+              value: http://{{ .Release.Name }}-gateway:8081
+            - name: NOTIFICATION_SERVICE_URL
+              value: http://{{ .Release.Name }}-gateway:8081

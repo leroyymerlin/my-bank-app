@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-cash
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: cash
+spec:
+  replicas: {{ .Values.cash.replicaCount }}
+  selector:
+    matchLabels:
+      app: cash
+  template:
+    metadata:
+      labels:
+        app: cash
+    spec:
+      containers:
+        - name: cash
+          image: "my-bank-app/cash:latest"
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          ports:
+            - containerPort: 8083
+          resources:
+            {{- toYaml .Values.cash.resources | nindent 12 }}
+          env:
+            - name: SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI
+              value: http://{{ .Release.Name }}-keycloak:8080/realms/myrealm
+            - name: ACCOUNT_SERVICE_URL
+              value: http://{{ .Release.Name }}-gateway:8081
+            - name: NOTIFICATION_SERVICE_URL
+              value: http://{{ .Release.Name }}-gateway:8081

@@ -1,0 +1,48 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-front
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: front
+spec:
+  type: {{ .Values.front.service.type }}
+  ports:
+    - port: {{ .Values.front.service.port }}
+      targetPort: 8080
+      protocol: TCP
+      name: http
+  selector:
+    app: front
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-front
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: front
+spec:
+  replicas: {{ .Values.front.replicaCount }}
+  selector:
+    matchLabels:
+      app: front
+  template:
+    metadata:
+      labels:
+        app: front
+    spec:
+      containers:
+        - name: front
+          image: "my-bank-app/front:latest"
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          ports:
+            - containerPort: 8080
+          resources:
+            {{- toYaml .Values.front.resources | nindent 12 }}
+          env:
+            - name: GATEWAY_URL
+              value: http://{{ .Release.Name }}-gateway:8081
+            - name: SPRING_SECURITY_OAUTH2_CLIENT_PROVIDER_KEYCLOAK_ISSUER_URI
+              value: http://{{ .Release.Name }}-keycloak:8080/realms/myrealm

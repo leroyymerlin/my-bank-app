@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-gateway
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: gateway
+spec:
+  replicas: {{ .Values.gateway.replicaCount }}
+  selector:
+    matchLabels:
+      app: gateway
+  template:
+    metadata:
+      labels:
+        app: gateway
+    spec:
+      containers:
+        - name: gateway
+          image: "my-bank-app/gateway:latest"
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          ports:
+            - containerPort: 8081
+          resources:
+            {{- toYaml .Values.gateway.resources | nindent 12 }}
+          env:
+            - name: SPRING_CLOUD_GATEWAY_ROUTES_0_URI
+              value: http://{{ .Release.Name }}-accounts:8082
+            - name: SPRING_CLOUD_GATEWAY_ROUTES_1_URI
+              value: http://{{ .Release.Name }}-cash:8083
+            - name: SPRING_CLOUD_GATEWAY_ROUTES_2_URI
+              value: http://{{ .Release.Name }}-transfer:8084
+            - name: SPRING_CLOUD_GATEWAY_ROUTES_3_URI
+              value: http://{{ .Release.Name }}-notifications:8085
+            - name: SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI
+              value: http://{{ .Release.Name }}-keycloak:8080/realms/myrealm
