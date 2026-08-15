@@ -1,0 +1,34 @@
+server:
+  port: 8084
+
+spring:
+  application:
+    name: transfer-service
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: http://localhost:8080/auth/realms/myrealm
+      client:
+        registration:
+          transfer-client:
+            client-id: transfer-client
+            client-secret: your-client-secret
+            authorization-grant-type: client_credentials
+            scope: internal
+        provider:
+          transfer-client:
+            token-uri: http://localhost:8080/auth/realms/myrealm/protocol/openid-connect/token
+
+account:
+  service:
+    url: http://localhost:8081
+
+notification:
+  service:
+    url: http://localhost:8081
+
+logging:
+  level:
+    org.springframework.security: DEBUG

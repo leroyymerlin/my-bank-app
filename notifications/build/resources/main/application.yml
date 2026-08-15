@@ -1,0 +1,16 @@
+server:
+  port: 8085
+
+spring:
+  application:
+    name: notifications-service
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: http://localhost:8080/auth/realms/myrealm   # URL Keycloak
+
+logging:
+  level:
+    org.springframework.security: DEBUG
