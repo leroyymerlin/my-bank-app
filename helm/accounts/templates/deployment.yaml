@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-accounts
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: accounts
+spec:
+  replicas: {{ .Values.accounts.replicaCount }}
+  selector:
+    matchLabels:
+      app: accounts
+  template:
+    metadata:
+      labels:
+        app: accounts
+    spec:
+      containers:
+        - name: accounts
+          image: "my-bank-app/accounts:latest"
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          ports:
+            - containerPort: 8082
+          resources:
+            {{- toYaml .Values.accounts.resources | nindent 12 }}
+          env:
+            - name: SPRING_DATASOURCE_URL
+              value: jdbc:postgresql://{{ .Release.Name }}-postgresql:5432/accounts_db
+            - name: SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI
+              value: http://{{ .Release.Name }}-keycloak:8080/realms/myrealm
+            - name: NOTIFICATION_SERVICE_URL
+              value: http://{{ .Release.Name }}-gateway:8081
