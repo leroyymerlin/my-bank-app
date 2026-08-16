@@ -1,25 +1,24 @@
 package ru.yandex.practicum.service;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
-import ru.yandex.practicum.dto.AccountInfoDto;
 import ru.yandex.practicum.client.AccountClient;
-import ru.yandex.practicum.client.NotificationClient;
+import ru.yandex.practicum.dto.AccountInfoDto;
+import ru.yandex.practicum.dto.TransferNotificationMessage;
 
 import java.math.BigDecimal;
 
 @Service
+@Slf4j
 public class TransferService {
 
-    private static final Logger log = LoggerFactory.getLogger(TransferService.class);
-
     private final AccountClient accountClient;
-    private final NotificationClient notificationClient;
+    private final KafkaTemplate<String, Object> kafkaTemplate;
 
-    public TransferService(AccountClient accountClient, NotificationClient notificationClient) {
+    public TransferService(AccountClient accountClient, KafkaTemplate<String, Object> kafkaTemplate) {
         this.accountClient = accountClient;
-        this.notificationClient = notificationClient;
+        this.kafkaTemplate = kafkaTemplate;
     }
 
     /**
@@ -62,14 +61,52 @@ public class TransferService {
             throw new RuntimeException("Перевод не выполнен: ошибка при зачислении получателю", e);
         }
 
-        try {
-            notificationClient.sendNotification(fromLogin, "Вы перевели " + formattedAmount +
-                    " пользователю " + toLogin +
-                    ". Новый баланс: " + senderAfterWithdraw.getBalance().setScale(2, BigDecimal.ROUND_HALF_UP));
-            notificationClient.sendNotification(toLogin, "Вы получили перевод " + formattedAmount + " от " + fromLogin);
-        } catch (Exception e) {
-            log.warn("Не удалось отправить уведомления, но перевод выполнен", e);
-        }
+        String senderMessage = "Вы перевели " + formattedAmount +
+                " пользователю " + toLogin +
+                ". Новый баланс: " + senderAfterWithdraw.getBalance().setScale(2, BigDecimal.ROUND_HALF_UP);
+        String receiverMessage = "Вы получили перевод " + formattedAmount + " от " + fromLogin;
+
+        TransferNotificationMessage senderNotification = TransferNotificationMessage.builder()
+                .login(fromLogin)
+                .message(senderMessage)
+                .type("TRANSFER_SENT")
+                .fromLogin(fromLogin)
+                .toLogin(toLogin)
+                .amount(formattedAmount.toString())
+                .timestamp(System.currentTimeMillis())
+                .build();
+
+        TransferNotificationMessage receiverNotification = TransferNotificationMessage.builder()
+                .login(toLogin)
+                .message(receiverMessage)
+                .type("TRANSFER_RECEIVED")
+                .fromLogin(fromLogin)
+                .toLogin(toLogin)
+                .amount(formattedAmount.toString())
+                .timestamp(System.currentTimeMillis())
+                .build();
+
+        String topic = "transfer-notifications";
+
+        kafkaTemplate.send(topic, fromLogin, senderNotification)
+                .whenComplete((result, ex) -> {
+                    if (ex != null) {
+                        log.error("Ошибка отправки уведомления отправителю {}: {}", fromLogin, ex.getMessage());
+                    } else {
+                        log.info("Уведомление отправлено отправителю: topic={}, offset={}",
+                                result.getProducerRecord().topic(), result.getRecordMetadata().offset());
+                    }
+                });
+
+        kafkaTemplate.send(topic, toLogin, receiverNotification)
+                .whenComplete((result, ex) -> {
+                    if (ex != null) {
+                        log.error("Ошибка отправки уведомления получателю {}: {}", toLogin, ex.getMessage());
+                    } else {
+                        log.info("Уведомление отправлено получателю: topic={}, offset={}",
+                                result.getProducerRecord().topic(), result.getRecordMetadata().offset());
+                    }
+                });
 
         return senderAfterWithdraw;
     }

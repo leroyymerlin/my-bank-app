@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-zookeeper
+  labels:
+    app: zookeeper
+spec:
+  type: ClusterIP
+  ports:
+    - port: {{ .Values.kafka.zookeeper.port }}
+      targetPort: {{ .Values.kafka.zookeeper.port }}
+      protocol: TCP
+      name: zookeeper
+  selector:
+    app: zookeeper

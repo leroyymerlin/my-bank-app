@@ -30,3 +30,5 @@ spec:
               value: http://{{ .Release.Name }}-keycloak:8080/realms/myrealm
             - name: NOTIFICATION_SERVICE_URL
               value: http://{{ .Release.Name }}-gateway:8081
+            - name: KAFKA_BOOTSTRAP_SERVERS
+              value: "{{ .Release.Name }}-kafka:9092"

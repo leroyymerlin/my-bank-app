@@ -26,3 +26,5 @@ spec:
           env:
             - name: SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI
               value: http://{{ .Release.Name }}-keycloak:8080/realms/myrealm
+            - name: KAFKA_BOOTSTRAP_SERVERS
+              value: "{{ .Release.Name }}-kafka:9092"

@@ -2,6 +2,51 @@
 imagePullPolicy: IfNotPresent
 namespace: my-bank-app
 
+# ===== Kafka =====
+kafka:
+  enabled: true
+  replicaCount: 1
+  image: confluentinc/cp-kafka:7.5.0
+  ports:
+    internal: 9092
+    external: 9093
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "250m"
+    limits:
+      memory: "1Gi"
+      cpu: "500m"
+  persistence:
+    enabled: true
+    size: 5Gi
+  zookeeper:
+    enabled: true
+    port: 2181
+    image: confluentinc/cp-zookeeper:7.5.0
+    resources:
+      requests:
+        memory: "256Mi"
+        cpu: "125m"
+      limits:
+        memory: "512Mi"
+        cpu: "250m"
+    persistence:
+      size: 1Gi
+    environment:
+      ZOOKEEPER_CLIENT_PORT: "2181"
+      ZOOKEEPER_TICK_TIME: "2000"
+  topics:
+    - name: cash-notifications
+      partitions: 3
+      replicationFactor: 1
+    - name: transfer-notifications
+      partitions: 3
+      replicationFactor: 1
+    - name: account-notifications
+      partitions: 3
+      replicationFactor: 1
+
 # ===== Keycloak =====
 keycloak:
   enabled: true

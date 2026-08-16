@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-zookeeper
+  labels:
+    app: zookeeper
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: zookeeper
+  template:
+    metadata:
+      labels:
+        app: zookeeper
+    spec:
+      containers:
+        - name: zookeeper
+          image: "{{ .Values.kafka.zookeeper.image }}"
+          imagePullPolicy: {{ .Values.imagePullPolicy | default "IfNotPresent" }}
+          ports:
+            - containerPort: {{ .Values.kafka.zookeeper.port }}
+              name: zookeeper
+          env:
+            {{- range $key, $value := .Values.kafka.zookeeper.environment }}
+            - name: {{ $key }}
+              value: "{{ $value }}"
+            {{- end }}
+          resources:
+            {{- toYaml .Values.kafka.zookeeper.resources | nindent 12 }}
+          volumeMounts:
+            - name: zookeeper-data
+              mountPath: /var/lib/zookeeper/data
+          readinessProbe:
+            tcpSocket:
+              port: {{ .Values.kafka.zookeeper.port }}
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          livenessProbe:
+            tcpSocket:
+              port: {{ .Values.kafka.zookeeper.port }}
+            initialDelaySeconds: 15
+            periodSeconds: 10
+      volumes:
+        - name: zookeeper-data
+          persistentVolumeClaim:
+            claimName: {{ .Release.Name }}-zookeeper-data

@@ -2,10 +2,10 @@ package ru.yandex.practicum.service;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.kafka.core.KafkaTemplate;
 import ru.yandex.practicum.dto.AccountDto;
 import ru.yandex.practicum.dto.AccountInfoDto;
 import ru.yandex.practicum.entity.Account;
@@ -17,6 +17,7 @@ import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -37,7 +38,7 @@ class AccountServiceTest {
     private AccountRepository accountRepository;
 
     @Mock
-    private NotificationClient notificationClient;
+    private KafkaTemplate<String, Object> kafkaTemplate;
 
     @InjectMocks
     private AccountService accountService;
@@ -65,7 +66,7 @@ class AccountServiceTest {
         assertThat(result.getBirthdate()).isEqualTo(TEST_BIRTHDATE.format(DATE_FORMATTER));
         assertThat(result.getBalance()).isEqualTo(TEST_BALANCE);
         verify(accountRepository, times(1)).findByLogin(TEST_LOGIN);
-        verifyNoInteractions(notificationClient);
+        verifyNoInteractions(kafkaTemplate);
     }
 
     @Test
@@ -76,7 +77,7 @@ class AccountServiceTest {
                 .isInstanceOf(AccountNotFoundException.class)
                 .hasMessage("Аккаунт не найден: " + TEST_LOGIN);
         verify(accountRepository, times(1)).findByLogin(TEST_LOGIN);
-        verifyNoInteractions(notificationClient);
+        verifyNoInteractions(kafkaTemplate);
     }
 
     @Test
@@ -91,7 +92,7 @@ class AccountServiceTest {
         assertThat(result).extracting(AccountDto::getLogin).containsExactly("user1", "user2");
         assertThat(result).extracting(AccountDto::getName).containsExactly("Петров Пётр", "Сидоров Сидор");
         verify(accountRepository, times(1)).findAll();
-        verifyNoInteractions(notificationClient);
+        verifyNoInteractions(kafkaTemplate);
     }
 
     @Test
@@ -102,7 +103,7 @@ class AccountServiceTest {
 
         assertThat(result).isEmpty();
         verify(accountRepository, times(1)).findAll();
-        verifyNoInteractions(notificationClient);
+        verifyNoInteractions(kafkaTemplate);
     }
 
     @Test
@@ -113,6 +114,7 @@ class AccountServiceTest {
 
         when(accountRepository.findByLogin(TEST_LOGIN)).thenReturn(Optional.of(account));
         when(accountRepository.save(any(Account.class))).thenReturn(account);
+        when(kafkaTemplate.send(anyString(), anyString(), any())).thenReturn(new CompletableFuture<>());
 
         AccountInfoDto result = accountService.updateAccount(TEST_LOGIN, newName, newBirthdate);
 
@@ -126,7 +128,7 @@ class AccountServiceTest {
 
         verify(accountRepository, times(1)).findByLogin(TEST_LOGIN);
         verify(accountRepository, times(1)).save(account);
-        verify(notificationClient, times(1)).sendNotification(TEST_LOGIN, "Ваши данные профиля были обновлены.");
+        verify(kafkaTemplate, times(1)).send(anyString(), anyString(), any());
     }
 
     @Test
@@ -139,26 +141,24 @@ class AccountServiceTest {
 
         verify(accountRepository, times(1)).findByLogin(TEST_LOGIN);
         verify(accountRepository, never()).save(any());
-        verify(notificationClient, never()).sendNotification(anyString(), anyString());
+        verify(kafkaTemplate, never()).send(anyString(), anyString(), any());
     }
 
     @Test
-    void updateAccount_shouldPropagateExceptionFromNotificationClient() {
+    void updateAccount_shouldNotPropagateExceptionFromKafka() {
         Account account = createTestAccount();
         String newName = "Петров Пётр";
         LocalDate newBirthdate = LocalDate.of(1985, 5, 15);
 
         when(accountRepository.findByLogin(TEST_LOGIN)).thenReturn(Optional.of(account));
         when(accountRepository.save(any(Account.class))).thenReturn(account);
-        doThrow(new RuntimeException("Ошибка отправки уведомления"))
-                .when(notificationClient).sendNotification(anyString(), anyString());
+        when(kafkaTemplate.send(anyString(), anyString(), any())).thenReturn(new CompletableFuture<>());
 
-        assertThatThrownBy(() -> accountService.updateAccount(TEST_LOGIN, newName, newBirthdate))
-                .isInstanceOf(RuntimeException.class)
-                .hasMessage("Ошибка отправки уведомления");
+        AccountInfoDto result = accountService.updateAccount(TEST_LOGIN, newName, newBirthdate);
 
+        assertThat(result).isNotNull();
         verify(accountRepository, times(1)).save(account);
-        verify(notificationClient, times(1)).sendNotification(anyString(), anyString());
+        verify(kafkaTemplate, times(1)).send(anyString(), anyString(), any());
     }
 
     @Test
@@ -169,6 +169,7 @@ class AccountServiceTest {
 
         when(accountRepository.findByLogin(TEST_LOGIN)).thenReturn(Optional.of(account));
         when(accountRepository.save(any(Account.class))).thenReturn(account);
+        when(kafkaTemplate.send(anyString(), anyString(), any())).thenReturn(new CompletableFuture<>());
 
         AccountInfoDto result = accountService.updateBalance(TEST_LOGIN, delta);
 
@@ -177,9 +178,7 @@ class AccountServiceTest {
 
         verify(accountRepository, times(1)).findByLogin(TEST_LOGIN);
         verify(accountRepository, times(1)).save(account);
-        verify(notificationClient, times(1))
-                .sendNotification(TEST_LOGIN, "Ваш баланс изменён на " + delta.setScale(2, BigDecimal.ROUND_HALF_UP) +
-                        ". Новый баланс: " + expectedBalance.setScale(2, BigDecimal.ROUND_HALF_UP));
+        verify(kafkaTemplate, times(1)).send(anyString(), anyString(), any());
     }
 
     @Test
@@ -190,15 +189,14 @@ class AccountServiceTest {
 
         when(accountRepository.findByLogin(TEST_LOGIN)).thenReturn(Optional.of(account));
         when(accountRepository.save(any(Account.class))).thenReturn(account);
+        when(kafkaTemplate.send(anyString(), anyString(), any())).thenReturn(new CompletableFuture<>());
 
         AccountInfoDto result = accountService.updateBalance(TEST_LOGIN, delta);
 
         assertThat(result.getBalance()).isEqualByComparingTo(expectedBalance);
         assertThat(account.getBalance()).isEqualByComparingTo(expectedBalance);
 
-        verify(notificationClient, times(1))
-                .sendNotification(TEST_LOGIN, "Ваш баланс изменён на " + delta.setScale(2, BigDecimal.ROUND_HALF_UP) +
-                        ". Новый баланс: " + expectedBalance.setScale(2, BigDecimal.ROUND_HALF_UP));
+        verify(kafkaTemplate, times(1)).send(anyString(), anyString(), any());
     }
 
     @Test
@@ -214,7 +212,7 @@ class AccountServiceTest {
         assertThat(account.getBalance()).isEqualTo(TEST_BALANCE);
         verify(accountRepository, times(1)).findByLogin(TEST_LOGIN);
         verify(accountRepository, never()).save(any());
-        verify(notificationClient, never()).sendNotification(anyString(), anyString());
+        verify(kafkaTemplate, never()).send(anyString(), anyString(), any());
     }
 
     @Test
@@ -227,7 +225,7 @@ class AccountServiceTest {
 
         verify(accountRepository, times(1)).findByLogin(TEST_LOGIN);
         verify(accountRepository, never()).save(any());
-        verify(notificationClient, never()).sendNotification(anyString(), anyString());
+        verify(kafkaTemplate, never()).send(anyString(), anyString(), any());
     }
 
     @Test
@@ -239,7 +237,7 @@ class AccountServiceTest {
 
         assertThat(result).isSameAs(account);
         verify(accountRepository, times(1)).findByLogin(TEST_LOGIN);
-        verifyNoInteractions(notificationClient);
+        verifyNoInteractions(kafkaTemplate);
     }
 
     @Test
@@ -251,7 +249,7 @@ class AccountServiceTest {
                 .hasMessage("Аккаунт не найден: " + TEST_LOGIN);
 
         verify(accountRepository, times(1)).findByLogin(TEST_LOGIN);
-        verifyNoInteractions(notificationClient);
+        verifyNoInteractions(kafkaTemplate);
     }
 
     @Test
@@ -262,7 +260,7 @@ class AccountServiceTest {
 
         assertThat(exists).isTrue();
         verify(accountRepository, times(1)).existsByLogin(TEST_LOGIN);
-        verifyNoInteractions(notificationClient);
+        verifyNoInteractions(kafkaTemplate);
     }
 
     @Test
@@ -273,6 +271,6 @@ class AccountServiceTest {
 
         assertThat(exists).isFalse();
         verify(accountRepository, times(1)).existsByLogin(TEST_LOGIN);
-        verifyNoInteractions(notificationClient);
+        verifyNoInteractions(kafkaTemplate);
     }
 }

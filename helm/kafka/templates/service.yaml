@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-kafka
+  labels:
+    app: kafka
+spec:
+  type: ClusterIP
+  ports:
+    - port: {{ .Values.kafka.ports.internal }}
+      targetPort: {{ .Values.kafka.ports.internal }}
+      protocol: TCP
+      name: kafka
+  selector:
+    app: kafka

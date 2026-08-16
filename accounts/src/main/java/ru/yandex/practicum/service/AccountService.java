@@ -1,10 +1,13 @@
 package ru.yandex.practicum.service;
 
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ru.yandex.practicum.dto.AccountDto;
 import ru.yandex.practicum.dto.AccountInfoDto;
+import ru.yandex.practicum.dto.AccountNotificationMessage;
 import ru.yandex.practicum.entity.Account;
 import ru.yandex.practicum.exception.AccountNotFoundException;
 import ru.yandex.practicum.repository.AccountRepository;
@@ -16,16 +19,17 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 @Service
+@Slf4j
 public class AccountService {
 
     private final AccountRepository accountRepository;
-    private final NotificationClient notificationClient;
+    private final KafkaTemplate<String, Object> kafkaTemplate;
 
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE;
 
-    public AccountService(AccountRepository accountRepository, NotificationClient notificationClient) {
+    public AccountService(AccountRepository accountRepository, KafkaTemplate<String, Object> kafkaTemplate) {
         this.accountRepository = accountRepository;
-        this.notificationClient = notificationClient;
+        this.kafkaTemplate = kafkaTemplate;
     }
 
     /**
@@ -63,7 +67,22 @@ public class AccountService {
         account.setBirthdate(newBirthdate);
         accountRepository.save(account);
 
-        notificationClient.sendNotification(login, "Ваши данные профиля были обновлены.");
+        AccountNotificationMessage profileMessage = AccountNotificationMessage.builder()
+                .login(login)
+                .message("Ваши данные профиля были обновлены.")
+                .type("PROFILE_UPDATED")
+                .timestamp(System.currentTimeMillis())
+                .build();
+
+        kafkaTemplate.send("account-notifications", login, profileMessage)
+                .whenComplete((result, ex) -> {
+                    if (ex != null) {
+                        log.error("Ошибка отправки в Kafka для {}: {}", login, ex.getMessage());
+                    } else {
+                        log.info("Уведомление отправлено в Kafka: topic={}, offset={}",
+                                result.getProducerRecord().topic(), result.getRecordMetadata().offset());
+                    }
+                });
 
         return new AccountInfoDto(
                 account.getName(),
@@ -107,9 +126,23 @@ public class AccountService {
                 account.setBalance(newBalance);
                 account = accountRepository.save(account);
 
-                notificationClient.sendNotification(login,
-                        "Ваш баланс изменён на " + delta.setScale(2, BigDecimal.ROUND_HALF_UP) +
-                                ". Новый баланс: " + account.getBalance().setScale(2, BigDecimal.ROUND_HALF_UP));
+                AccountNotificationMessage balanceMessage = AccountNotificationMessage.builder()
+                        .login(login)
+                        .message("Ваш баланс изменён на " + delta.setScale(2, BigDecimal.ROUND_HALF_UP) +
+                                ". Новый баланс: " + account.getBalance().setScale(2, BigDecimal.ROUND_HALF_UP))
+                        .type("BALANCE_UPDATED")
+                        .timestamp(System.currentTimeMillis())
+                        .build();
+
+                kafkaTemplate.send("account-notifications", login, balanceMessage)
+                        .whenComplete((result, ex) -> {
+                            if (ex != null) {
+                                log.error("Ошибка отправки в Kafka для {}: {}", login, ex.getMessage());
+                            } else {
+                                log.info("Уведомление о балансе отправлено в Kafka: topic={}, offset={}",
+                                        result.getProducerRecord().topic(), result.getRecordMetadata().offset());
+                            }
+                        });
 
                 return new AccountInfoDto(
                         account.getName(),
@@ -131,7 +164,7 @@ public class AccountService {
     }
 
     /**
-     * Получение сущности аккаунта по логину (для внутреннего использования).
+     * Получение сущности аккаунта по логину.
      */
     public Account getAccountEntity(String login) {
         return accountRepository.findByLogin(login)
