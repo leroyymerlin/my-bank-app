@@ -14,22 +14,25 @@ spec:
       labels:
         app: kafka
     spec:
+      terminationGracePeriodSeconds: 60
       containers:
         - name: kafka
-          image: "{{ .Values.kafka.image }}"
-          imagePullPolicy: {{ .Values.imagePullPolicy | default "IfNotPresent" }}
+          image: "{{ .Values.image }}"
+          imagePullPolicy: {{ .Values.global.imagePullPolicy | default "IfNotPresent" }}
           ports:
-            - containerPort: {{ .Values.kafka.ports.internal }}
+            - containerPort: {{ .Values.ports.internal }}
               name: kafka
+            - containerPort: {{ .Values.ports.external }}
+              name: kafka-external
           env:
             - name: KAFKA_BROKER_ID
               value: "1"
             - name: KAFKA_ZOOKEEPER_CONNECT
-              value: "{{ .Release.Name }}-zookeeper:{{ .Values.kafka.zookeeper.port }}"
+              value: "{{ .Release.Name }}-zookeeper:{{ .Values.zookeeper.port }}"
             - name: KAFKA_LISTENERS
-              value: "INTERNAL://0.0.0.0:{{ .Values.kafka.ports.internal }},EXTERNAL://0.0.0.0:{{ .Values.kafka.ports.external }}"
+              value: "INTERNAL://0.0.0.0:{{ .Values.ports.internal }},EXTERNAL://0.0.0.0:{{ .Values.ports.external }}"
             - name: KAFKA_ADVERTISED_LISTENERS
-              value: "INTERNAL://{{ .Release.Name }}-kafka:{{ .Values.kafka.ports.internal }},EXTERNAL://{{ .Release.Name }}-kafka:{{ .Values.kafka.ports.external }}"
+              value: "INTERNAL://{{ .Release.Name }}-kafka:{{ .Values.ports.internal }},EXTERNAL://{{ .Release.Name }}-kafka:{{ .Values.ports.external }}"
             - name: KAFKA_LISTENER_SECURITY_PROTOCOL_MAP
               value: "INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT"
             - name: KAFKA_INTER_BROKER_LISTENER_NAME
@@ -49,20 +52,35 @@ spec:
             - name: KAFKA_LOG_RETENTION_CHECK_INTERVAL_MS
               value: "300000"
           resources:
-            {{- toYaml .Values.kafka.resources | nindent 12 }}
+            {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:
             - name: kafka-data
               mountPath: /var/lib/kafka/data
           readinessProbe:
             tcpSocket:
-              port: {{ .Values.kafka.ports.internal }}
-            initialDelaySeconds: 10
-            periodSeconds: 5
-          livenessProbe:
-            tcpSocket:
-              port: {{ .Values.kafka.ports.internal }}
+              port: {{ .Values.ports.internal }}
             initialDelaySeconds: 15
             periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 5
+          livenessProbe:
+            tcpSocket:
+              port: {{ .Values.ports.internal }}
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          startupProbe:
+            tcpSocket:
+              port: {{ .Values.ports.internal }}
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 30
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sh", "-c", "sleep 30"]
       volumes:
         - name: kafka-data
           persistentVolumeClaim:

@@ -19,3 +19,17 @@ spring:
   h2:
     console:
       enabled: true
+
+  kafka:
+    consumer:
+      bootstrap-servers: ${spring.embedded.kafka.brokers:localhost:9092}
+      properties:
+        spring.json.trusted.packages: "*"
+        spring.json.value.as.string: true
+        spring.json.key.as.string: true
+    producer:
+      bootstrap-servers: ${spring.embedded.kafka.brokers:localhost:9092}
+
+kafka:
+  dlt:
+    name: "notifications-service.dlt"

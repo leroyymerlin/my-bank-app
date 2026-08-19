@@ -7,8 +7,8 @@ metadata:
 spec:
   type: ClusterIP
   ports:
-    - port: {{ .Values.kafka.zookeeper.port }}
-      targetPort: {{ .Values.kafka.zookeeper.port }}
+    - port: {{ .Values.zookeeper.port }}
+      targetPort: {{ .Values.zookeeper.port }}
       protocol: TCP
       name: zookeeper
   selector:

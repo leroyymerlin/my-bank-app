@@ -147,3 +147,10 @@ services:
         condition: service_healthy
     networks:
       - app-network
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  postgres_data:

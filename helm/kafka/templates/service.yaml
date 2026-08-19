@@ -7,8 +7,8 @@ metadata:
 spec:
   type: ClusterIP
   ports:
-    - port: {{ .Values.kafka.ports.internal }}
-      targetPort: {{ .Values.kafka.ports.internal }}
+    - port: {{ .Values.ports.internal }}
+      targetPort: {{ .Values.ports.internal }}
       protocol: TCP
       name: kafka
   selector:

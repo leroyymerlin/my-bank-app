@@ -1,0 +1,2 @@
+-- Init script for PostgreSQL Testcontainer
+-- Only needed if TC_INITSCRIPT is used, otherwise Flyway handles migration

@@ -2,11 +2,11 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {{ .Release.Name }}-gateway
-  namespace: {{ .Release.Namespace }}
+  namespace: {{ .Values.global.namespace }}
   labels:
     app: gateway
 spec:
-  replicas: {{ .Values.gateway.replicaCount }}
+  replicas: {{ .Values.replicaCount }}
   selector:
     matchLabels:
       app: gateway
@@ -15,14 +15,16 @@ spec:
       labels:
         app: gateway
     spec:
+      terminationGracePeriodSeconds: 30
       containers:
         - name: gateway
           image: "my-bank-app/gateway:latest"
-          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
           ports:
             - containerPort: 8081
+              name: http
           resources:
-            {{- toYaml .Values.gateway.resources | nindent 12 }}
+            {{- toYaml .Values.resources | nindent 12 }}
           env:
             - name: SPRING_CLOUD_GATEWAY_ROUTES_0_URI
               value: http://{{ .Release.Name }}-accounts:8082
@@ -33,4 +35,32 @@ spec:
             - name: SPRING_CLOUD_GATEWAY_ROUTES_3_URI
               value: http://{{ .Release.Name }}-notifications:8085
             - name: SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI
-              value: http://{{ .Release.Name }}-keycloak:8080/realms/myrealm
+              value: {{ .Values.global.keycloak.issuerUri | default "http://{{ .Release.Name }}-keycloak:8080/realms/myrealm" }}
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          startupProbe:
+            httpGet:
+              path: /actuator/health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 30
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sh", "-c", "sleep 10"]

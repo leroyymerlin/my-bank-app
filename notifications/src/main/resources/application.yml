@@ -22,6 +22,10 @@ spring:
         jwt:
           issuer-uri: http://localhost:8080/auth/realms/myrealm   # URL Keycloak
 
+kafka:
+  dlt:
+    name: "${spring.kafka.consumer.group-id}.dlt"
+
 logging:
   level:
     org.springframework.security: DEBUG

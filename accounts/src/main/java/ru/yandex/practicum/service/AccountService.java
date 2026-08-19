@@ -24,12 +24,15 @@ public class AccountService {
 
     private final AccountRepository accountRepository;
     private final KafkaTemplate<String, Object> kafkaTemplate;
+    private final BalanceUpdateService balanceUpdateService;
 
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE;
 
-    public AccountService(AccountRepository accountRepository, KafkaTemplate<String, Object> kafkaTemplate) {
+    public AccountService(AccountRepository accountRepository, KafkaTemplate<String, Object> kafkaTemplate,
+                          BalanceUpdateService balanceUpdateService) {
         this.accountRepository = accountRepository;
         this.kafkaTemplate = kafkaTemplate;
+        this.balanceUpdateService = balanceUpdateService;
     }
 
     /**
@@ -97,6 +100,10 @@ public class AccountService {
 
     /**
      * Изменение баланса (используется другими микросервисами).
+     *
+     * <p>Валидация выполняется в этой транзакции, а само обновление баланса
+     * делегируется в {@link BalanceUpdateService} с отдельной транзакцией и retry.</p>
+     *
      * @param login логин
      * @param delta изменение (положительное или отрицательное)
      */
@@ -110,57 +117,27 @@ public class AccountService {
             throw new IllegalArgumentException("Сумма транзакции превышает максимальное значение");
         }
 
-        int retries = 3;
-        while (retries-- > 0) {
-            try {
-                Account account = accountRepository.findByLogin(login)
-                        .orElseThrow(() -> new AccountNotFoundException("Аккаунт не найден: " + login));
+        AccountInfoDto result = balanceUpdateService.doUpdateBalance(login, delta);
 
-                BigDecimal newBalance = account.getBalance().add(delta);
-                if (newBalance.compareTo(BigDecimal.ZERO) < 0) {
-                    throw new IllegalArgumentException("Недостаточно средств на счёте");
-                }
-                if (newBalance.compareTo(MAX_BALANCE_DEC) > 0) {
-                    throw new IllegalArgumentException("Превышен максимальный баланс");
-                }
-                account.setBalance(newBalance);
-                account = accountRepository.save(account);
+        AccountNotificationMessage balanceMessage = AccountNotificationMessage.builder()
+                .login(login)
+                .message("Ваш баланс изменён на " + delta.setScale(2, BigDecimal.ROUND_HALF_UP) +
+                        ". Новый баланс: " + result.getBalance().setScale(2, BigDecimal.ROUND_HALF_UP))
+                .type("BALANCE_UPDATED")
+                .timestamp(System.currentTimeMillis())
+                .build();
 
-                AccountNotificationMessage balanceMessage = AccountNotificationMessage.builder()
-                        .login(login)
-                        .message("Ваш баланс изменён на " + delta.setScale(2, BigDecimal.ROUND_HALF_UP) +
-                                ". Новый баланс: " + account.getBalance().setScale(2, BigDecimal.ROUND_HALF_UP))
-                        .type("BALANCE_UPDATED")
-                        .timestamp(System.currentTimeMillis())
-                        .build();
+        kafkaTemplate.send("account-notifications", login, balanceMessage)
+                .whenComplete((kafkaResult, ex) -> {
+                    if (ex != null) {
+                        log.error("Ошибка отправки в Kafka для {}: {}", login, ex.getMessage());
+                    } else {
+                        log.info("Уведомление о балансе отправлено в Kafka: topic={}, offset={}",
+                                kafkaResult.getProducerRecord().topic(), kafkaResult.getRecordMetadata().offset());
+                    }
+                });
 
-                kafkaTemplate.send("account-notifications", login, balanceMessage)
-                        .whenComplete((result, ex) -> {
-                            if (ex != null) {
-                                log.error("Ошибка отправки в Kafka для {}: {}", login, ex.getMessage());
-                            } else {
-                                log.info("Уведомление о балансе отправлено в Kafka: topic={}, offset={}",
-                                        result.getProducerRecord().topic(), result.getRecordMetadata().offset());
-                            }
-                        });
-
-                return new AccountInfoDto(
-                        account.getName(),
-                        account.getBirthdate().format(DATE_FORMATTER),
-                        account.getBalance()
-                );
-            } catch (OptimisticLockingFailureException e) {
-                if (retries == 0) {
-                    throw new RuntimeException("Не удалось обновить баланс из-за конкурентного доступа", e);
-                }
-                try {
-                    Thread.sleep(50);
-                } catch (InterruptedException ignored) {
-
-                }
-            }
-        }
-        throw new IllegalStateException("Неизвестная ошибка при обновлении баланса");
+        return result;
     }
 
     /**

@@ -13,6 +13,7 @@ repositories {
 
 dependencies {
 
+    implementation(project(":notification-contract"))
     implementation("org.projectlombok:lombok")
     annotationProcessor("org.projectlombok:lombok")
 

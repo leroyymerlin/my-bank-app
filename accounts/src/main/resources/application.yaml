@@ -24,8 +24,8 @@ spring:
     locations: classpath:db/migration
 
   kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     producer:
-      bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
       acks: all
@@ -35,7 +35,7 @@ spring:
     oauth2:
       resourceserver:
         jwt:
-          issuer-uri: http://localhost:8080/auth/realms/myrealm   # URL Keycloak
+          issuer-uri: http://localhost:8080/auth/realms/myrealm
       client:
         registration:
           notification-client:
@@ -55,3 +55,12 @@ logging:
   level:
     org.springframework.security: DEBUG
     org.apache.kafka: DEBUG
+
+# Configuration для retry обновления баланса
+balance:
+  update:
+    retries: 3
+    backoff:
+      delay: 100
+      multiplier: 2.0
+      max: 2000

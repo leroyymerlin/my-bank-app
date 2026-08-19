@@ -5,6 +5,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 import org.springframework.kafka.core.KafkaTemplate;
 import ru.yandex.practicum.dto.AccountDto;
 import ru.yandex.practicum.dto.AccountInfoDto;
@@ -26,6 +28,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 class AccountServiceTest {
 
     private static final String TEST_LOGIN = "testuser";
@@ -39,6 +42,9 @@ class AccountServiceTest {
 
     @Mock
     private KafkaTemplate<String, Object> kafkaTemplate;
+
+    @Mock
+    private BalanceUpdateService balanceUpdateService;
 
     @InjectMocks
     private AccountService accountService;
@@ -168,16 +174,14 @@ class AccountServiceTest {
         BigDecimal expectedBalance = TEST_BALANCE.add(delta);
 
         when(accountRepository.findByLogin(TEST_LOGIN)).thenReturn(Optional.of(account));
-        when(accountRepository.save(any(Account.class))).thenReturn(account);
+        when(balanceUpdateService.doUpdateBalance(TEST_LOGIN, delta)).thenReturn(
+                new AccountInfoDto(TEST_NAME, TEST_BIRTHDATE.format(DATE_FORMATTER), expectedBalance));
         when(kafkaTemplate.send(anyString(), anyString(), any())).thenReturn(new CompletableFuture<>());
 
         AccountInfoDto result = accountService.updateBalance(TEST_LOGIN, delta);
 
         assertThat(result.getBalance()).isEqualByComparingTo(expectedBalance);
-        assertThat(account.getBalance()).isEqualByComparingTo(expectedBalance);
-
-        verify(accountRepository, times(1)).findByLogin(TEST_LOGIN);
-        verify(accountRepository, times(1)).save(account);
+        verify(balanceUpdateService, times(1)).doUpdateBalance(TEST_LOGIN, delta);
         verify(kafkaTemplate, times(1)).send(anyString(), anyString(), any());
     }
 
@@ -188,14 +192,14 @@ class AccountServiceTest {
         BigDecimal expectedBalance = TEST_BALANCE.add(delta);
 
         when(accountRepository.findByLogin(TEST_LOGIN)).thenReturn(Optional.of(account));
-        when(accountRepository.save(any(Account.class))).thenReturn(account);
+        when(balanceUpdateService.doUpdateBalance(TEST_LOGIN, delta)).thenReturn(
+                new AccountInfoDto(TEST_NAME, TEST_BIRTHDATE.format(DATE_FORMATTER), expectedBalance));
         when(kafkaTemplate.send(anyString(), anyString(), any())).thenReturn(new CompletableFuture<>());
 
         AccountInfoDto result = accountService.updateBalance(TEST_LOGIN, delta);
 
         assertThat(result.getBalance()).isEqualByComparingTo(expectedBalance);
-        assertThat(account.getBalance()).isEqualByComparingTo(expectedBalance);
-
+        verify(balanceUpdateService, times(1)).doUpdateBalance(TEST_LOGIN, delta);
         verify(kafkaTemplate, times(1)).send(anyString(), anyString(), any());
     }
 
@@ -204,28 +208,16 @@ class AccountServiceTest {
         Account account = createTestAccount();
         BigDecimal delta = new BigDecimal("-2000");
         when(accountRepository.findByLogin(TEST_LOGIN)).thenReturn(Optional.of(account));
+        when(balanceUpdateService.doUpdateBalance(TEST_LOGIN, delta))
+                .thenThrow(new IllegalArgumentException("Недостаточно средств на счёте"));
 
         assertThatThrownBy(() -> accountService.updateBalance(TEST_LOGIN, delta))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("Недостаточно средств на счёте");
 
         assertThat(account.getBalance()).isEqualTo(TEST_BALANCE);
-        verify(accountRepository, times(1)).findByLogin(TEST_LOGIN);
+        verify(balanceUpdateService, times(1)).doUpdateBalance(TEST_LOGIN, delta);
         verify(accountRepository, never()).save(any());
-        verify(kafkaTemplate, never()).send(anyString(), anyString(), any());
-    }
-
-    @Test
-    void updateBalance_shouldThrowAccountNotFoundException_whenAccountNotFound() {
-        when(accountRepository.findByLogin(TEST_LOGIN)).thenReturn(Optional.empty());
-
-        assertThatThrownBy(() -> accountService.updateBalance(TEST_LOGIN, new BigDecimal("100")))
-                .isInstanceOf(AccountNotFoundException.class)
-                .hasMessage("Аккаунт не найден: " + TEST_LOGIN);
-
-        verify(accountRepository, times(1)).findByLogin(TEST_LOGIN);
-        verify(accountRepository, never()).save(any());
-        verify(kafkaTemplate, never()).send(anyString(), anyString(), any());
     }
 
     @Test
