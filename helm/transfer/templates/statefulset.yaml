@@ -36,6 +36,7 @@ spec:
     metadata:
       labels:
         app: postgresql
+        component: {{ .Chart.Name }}
     spec:
       containers:
         - name: postgresql

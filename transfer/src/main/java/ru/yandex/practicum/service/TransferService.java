@@ -5,7 +5,8 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import ru.yandex.practicum.client.AccountClient;
 import ru.yandex.practicum.dto.AccountInfoDto;
-import ru.yandex.practicum.dto.TransferNotificationMessage;
+import ru.yandex.practicum.event.NotificationEvent;
+import ru.yandex.practicum.event.NotificationEventFactory;
 
 import java.math.BigDecimal;
 
@@ -14,9 +15,9 @@ import java.math.BigDecimal;
 public class TransferService {
 
     private final AccountClient accountClient;
-    private final KafkaTemplate<String, Object> kafkaTemplate;
+    private final KafkaTemplate<String, NotificationEvent> kafkaTemplate;
 
-    public TransferService(AccountClient accountClient, KafkaTemplate<String, Object> kafkaTemplate) {
+    public TransferService(AccountClient accountClient, KafkaTemplate<String, NotificationEvent> kafkaTemplate) {
         this.accountClient = accountClient;
         this.kafkaTemplate = kafkaTemplate;
     }
@@ -66,29 +67,15 @@ public class TransferService {
                 ". Новый баланс: " + senderAfterWithdraw.getBalance().setScale(2, BigDecimal.ROUND_HALF_UP);
         String receiverMessage = "Вы получили перевод " + formattedAmount + " от " + fromLogin;
 
-        TransferNotificationMessage senderNotification = TransferNotificationMessage.builder()
-                .login(fromLogin)
-                .message(senderMessage)
-                .type("TRANSFER_SENT")
-                .fromLogin(fromLogin)
-                .toLogin(toLogin)
-                .amount(formattedAmount.toString())
-                .timestamp(System.currentTimeMillis())
-                .build();
+        NotificationEvent senderEvent = NotificationEventFactory.createTransferSent(
+                fromLogin, toLogin, formattedAmount.toString());
 
-        TransferNotificationMessage receiverNotification = TransferNotificationMessage.builder()
-                .login(toLogin)
-                .message(receiverMessage)
-                .type("TRANSFER_RECEIVED")
-                .fromLogin(fromLogin)
-                .toLogin(toLogin)
-                .amount(formattedAmount.toString())
-                .timestamp(System.currentTimeMillis())
-                .build();
+        NotificationEvent receiverEvent = NotificationEventFactory.createTransferReceived(
+                toLogin, fromLogin, formattedAmount.toString());
 
         String topic = "transfer-notifications";
 
-        kafkaTemplate.send(topic, fromLogin, senderNotification)
+        kafkaTemplate.send(topic, fromLogin, senderEvent)
                 .whenComplete((result, ex) -> {
                     if (ex != null) {
                         log.error("Ошибка отправки уведомления отправителю {}: {}", fromLogin, ex.getMessage());
@@ -98,7 +85,7 @@ public class TransferService {
                     }
                 });
 
-        kafkaTemplate.send(topic, toLogin, receiverNotification)
+        kafkaTemplate.send(topic, toLogin, receiverEvent)
                 .whenComplete((result, ex) -> {
                     if (ex != null) {
                         log.error("Ошибка отправки уведомления получателю {}: {}", toLogin, ex.getMessage());

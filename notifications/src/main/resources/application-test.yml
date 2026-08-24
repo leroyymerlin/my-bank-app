@@ -1,4 +1,8 @@
 spring:
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration
+
   datasource:
     url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=false
     username: sa
@@ -20,16 +24,6 @@ spring:
     console:
       enabled: true
 
-  kafka:
-    consumer:
-      bootstrap-servers: ${spring.embedded.kafka.brokers:localhost:9092}
-      properties:
-        spring.json.trusted.packages: "*"
-        spring.json.value.as.string: true
-        spring.json.key.as.string: true
-    producer:
-      bootstrap-servers: ${spring.embedded.kafka.brokers:localhost:9092}
-
 kafka:
   dlt:
-    name: "notifications-service.dlt"
+    name: "notification-e2e-test.dlt"

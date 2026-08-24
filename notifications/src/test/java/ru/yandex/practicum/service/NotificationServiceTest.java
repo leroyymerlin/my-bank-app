@@ -12,7 +12,7 @@ class NotificationServiceTest {
 
     @BeforeEach
     void setUp() {
-        notificationService = new NotificationService();
+        notificationService = new NotificationService(new ProcessedEventsStorage());
     }
 
     @Test

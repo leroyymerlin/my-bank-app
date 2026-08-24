@@ -7,8 +7,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ru.yandex.practicum.dto.AccountDto;
 import ru.yandex.practicum.dto.AccountInfoDto;
-import ru.yandex.practicum.dto.AccountNotificationMessage;
 import ru.yandex.practicum.entity.Account;
+import ru.yandex.practicum.event.NotificationEvent;
+import ru.yandex.practicum.event.NotificationEventFactory;
 import ru.yandex.practicum.exception.AccountNotFoundException;
 import ru.yandex.practicum.repository.AccountRepository;
 
@@ -23,12 +24,12 @@ import java.util.stream.Collectors;
 public class AccountService {
 
     private final AccountRepository accountRepository;
-    private final KafkaTemplate<String, Object> kafkaTemplate;
+    private final KafkaTemplate<String, NotificationEvent> kafkaTemplate;
     private final BalanceUpdateService balanceUpdateService;
 
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE;
 
-    public AccountService(AccountRepository accountRepository, KafkaTemplate<String, Object> kafkaTemplate,
+    public AccountService(AccountRepository accountRepository, KafkaTemplate<String, NotificationEvent> kafkaTemplate,
                           BalanceUpdateService balanceUpdateService) {
         this.accountRepository = accountRepository;
         this.kafkaTemplate = kafkaTemplate;
@@ -70,14 +71,9 @@ public class AccountService {
         account.setBirthdate(newBirthdate);
         accountRepository.save(account);
 
-        AccountNotificationMessage profileMessage = AccountNotificationMessage.builder()
-                .login(login)
-                .message("Ваши данные профиля были обновлены.")
-                .type("PROFILE_UPDATED")
-                .timestamp(System.currentTimeMillis())
-                .build();
+        NotificationEvent profileEvent = NotificationEventFactory.createProfileUpdated(login);
 
-        kafkaTemplate.send("account-notifications", login, profileMessage)
+        kafkaTemplate.send("account-notifications", login, profileEvent)
                 .whenComplete((result, ex) -> {
                     if (ex != null) {
                         log.error("Ошибка отправки в Kafka для {}: {}", login, ex.getMessage());
@@ -119,15 +115,11 @@ public class AccountService {
 
         AccountInfoDto result = balanceUpdateService.doUpdateBalance(login, delta);
 
-        AccountNotificationMessage balanceMessage = AccountNotificationMessage.builder()
-                .login(login)
-                .message("Ваш баланс изменён на " + delta.setScale(2, BigDecimal.ROUND_HALF_UP) +
-                        ". Новый баланс: " + result.getBalance().setScale(2, BigDecimal.ROUND_HALF_UP))
-                .type("BALANCE_UPDATED")
-                .timestamp(System.currentTimeMillis())
-                .build();
+        String balanceMessage = "Ваш баланс изменён на " + delta.setScale(2, BigDecimal.ROUND_HALF_UP) +
+                ". Новый баланс: " + result.getBalance().setScale(2, BigDecimal.ROUND_HALF_UP);
+        NotificationEvent balanceEvent = NotificationEventFactory.createBalanceUpdated(login, balanceMessage);
 
-        kafkaTemplate.send("account-notifications", login, balanceMessage)
+        kafkaTemplate.send("account-notifications", login, balanceEvent)
                 .whenComplete((kafkaResult, ex) -> {
                     if (ex != null) {
                         log.error("Ошибка отправки в Kafka для {}: {}", login, ex.getMessage());

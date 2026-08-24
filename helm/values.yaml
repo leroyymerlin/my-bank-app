@@ -3,6 +3,20 @@ global:
   imagePullPolicy: IfNotPresent
   namespace: my-bank-app
 
+  # ===== PostgreSQL =====
+  postgresql:
+    enabled: true
+    service:
+      type: ClusterIP
+      port: 5432
+    resources:
+      requests:
+        memory: "256Mi"
+        cpu: "125m"
+      limits:
+        memory: "512Mi"
+        cpu: "250m"
+
   # ===== Keycloak =====
   # When global.keycloak.enabled=true, uses the bundled Keycloak chart
   # When global.keycloak.enabled=false, set issuerUri to external Keycloak URL
@@ -39,20 +53,6 @@ keycloak:
     limits:
       memory: "1Gi"
       cpu: "500m"
-
-  # ===== PostgreSQL =====
-  postgresql:
-    enabled: true
-    service:
-      type: ClusterIP
-      port: 5432
-    resources:
-      requests:
-        memory: "256Mi"
-        cpu: "125m"
-      limits:
-        memory: "512Mi"
-        cpu: "250m"
 
 # ===== Kafka =====
 kafka:

@@ -76,11 +76,11 @@ class CashServiceTest {
     void processCash_shouldThrowException_whenAmountIsZeroOrNegative() {
         assertThatThrownBy(() -> cashService.processCash(TEST_LOGIN, BigDecimal.valueOf(0), CashAction.PUT))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("Сумма должна быть положительной");
+                .hasMessage("Amount must be positive");
 
         assertThatThrownBy(() -> cashService.processCash(TEST_LOGIN, BigDecimal.valueOf(-100), CashAction.GET))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("Сумма должна быть положительной");
+                .hasMessage("Amount must be positive");
 
         verifyNoInteractions(accountClient);
         verifyNoInteractions(kafkaTemplate);
@@ -98,5 +98,18 @@ class CashServiceTest {
 
         verify(accountClient, times(1)).changeBalance(eq(TEST_LOGIN), eq(TEST_AMOUNT));
         verify(kafkaTemplate, never()).send(anyString(), anyString(), any());
+    }
+
+    @Test
+    void processCash_withNullAction_shouldThrowExceptionAndNotCallAccountClient() {
+        String login = "user";
+        BigDecimal amount = BigDecimal.valueOf(100);
+
+        assertThatThrownBy(() -> cashService.processCash(login, amount, null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Action must not be null");
+
+        verify(accountClient, never()).changeBalance(login, amount);
+        verify(kafkaTemplate, never()).send("cash-notifications", login, null);
     }
 }
