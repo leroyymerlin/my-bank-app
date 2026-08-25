@@ -2,13 +2,13 @@ apiVersion: v1
 kind: Service
 metadata:
   name: {{ .Release.Name }}-transfer
-  namespace: {{ .Release.Namespace }}
+  namespace: {{ .Values.global.namespace }}
   labels:
     app: transfer
 spec:
-  type: {{ .Values.transfer.service.type }}
+  type: {{ .Values.service.type }}
   ports:
-    - port: {{ .Values.transfer.service.port }}
+    - port: {{ .Values.service.port }}
       targetPort: 8084
       protocol: TCP
       name: http

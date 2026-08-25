@@ -1,11 +1,15 @@
 package ru.yandex.practicum.service;
 
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ru.yandex.practicum.dto.AccountDto;
 import ru.yandex.practicum.dto.AccountInfoDto;
 import ru.yandex.practicum.entity.Account;
+import ru.yandex.practicum.event.NotificationEvent;
+import ru.yandex.practicum.event.NotificationEventFactory;
 import ru.yandex.practicum.exception.AccountNotFoundException;
 import ru.yandex.practicum.repository.AccountRepository;
 
@@ -16,16 +20,20 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 @Service
+@Slf4j
 public class AccountService {
 
     private final AccountRepository accountRepository;
-    private final NotificationClient notificationClient;
+    private final KafkaTemplate<String, NotificationEvent> kafkaTemplate;
+    private final BalanceUpdateService balanceUpdateService;
 
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE;
 
-    public AccountService(AccountRepository accountRepository, NotificationClient notificationClient) {
+    public AccountService(AccountRepository accountRepository, KafkaTemplate<String, NotificationEvent> kafkaTemplate,
+                          BalanceUpdateService balanceUpdateService) {
         this.accountRepository = accountRepository;
-        this.notificationClient = notificationClient;
+        this.kafkaTemplate = kafkaTemplate;
+        this.balanceUpdateService = balanceUpdateService;
     }
 
     /**
@@ -63,7 +71,17 @@ public class AccountService {
         account.setBirthdate(newBirthdate);
         accountRepository.save(account);
 
-        notificationClient.sendNotification(login, "Ваши данные профиля были обновлены.");
+        NotificationEvent profileEvent = NotificationEventFactory.createProfileUpdated(login);
+
+        kafkaTemplate.send("account-notifications", login, profileEvent)
+                .whenComplete((result, ex) -> {
+                    if (ex != null) {
+                        log.error("Ошибка отправки в Kafka для {}: {}", login, ex.getMessage());
+                    } else {
+                        log.info("Уведомление отправлено в Kafka: topic={}, offset={}",
+                                result.getProducerRecord().topic(), result.getRecordMetadata().offset());
+                    }
+                });
 
         return new AccountInfoDto(
                 account.getName(),
@@ -78,6 +96,10 @@ public class AccountService {
 
     /**
      * Изменение баланса (используется другими микросервисами).
+     *
+     * <p>Валидация выполняется в этой транзакции, а само обновление баланса
+     * делегируется в {@link BalanceUpdateService} с отдельной транзакцией и retry.</p>
+     *
      * @param login логин
      * @param delta изменение (положительное или отрицательное)
      */
@@ -91,47 +113,27 @@ public class AccountService {
             throw new IllegalArgumentException("Сумма транзакции превышает максимальное значение");
         }
 
-        int retries = 3;
-        while (retries-- > 0) {
-            try {
-                Account account = accountRepository.findByLogin(login)
-                        .orElseThrow(() -> new AccountNotFoundException("Аккаунт не найден: " + login));
+        AccountInfoDto result = balanceUpdateService.doUpdateBalance(login, delta);
 
-                BigDecimal newBalance = account.getBalance().add(delta);
-                if (newBalance.compareTo(BigDecimal.ZERO) < 0) {
-                    throw new IllegalArgumentException("Недостаточно средств на счёте");
-                }
-                if (newBalance.compareTo(MAX_BALANCE_DEC) > 0) {
-                    throw new IllegalArgumentException("Превышен максимальный баланс");
-                }
-                account.setBalance(newBalance);
-                account = accountRepository.save(account);
+        String balanceMessage = "Ваш баланс изменён на " + delta.setScale(2, BigDecimal.ROUND_HALF_UP) +
+                ". Новый баланс: " + result.getBalance().setScale(2, BigDecimal.ROUND_HALF_UP);
+        NotificationEvent balanceEvent = NotificationEventFactory.createBalanceUpdated(login, balanceMessage);
 
-                notificationClient.sendNotification(login,
-                        "Ваш баланс изменён на " + delta.setScale(2, BigDecimal.ROUND_HALF_UP) +
-                                ". Новый баланс: " + account.getBalance().setScale(2, BigDecimal.ROUND_HALF_UP));
+        kafkaTemplate.send("account-notifications", login, balanceEvent)
+                .whenComplete((kafkaResult, ex) -> {
+                    if (ex != null) {
+                        log.error("Ошибка отправки в Kafka для {}: {}", login, ex.getMessage());
+                    } else {
+                        log.info("Уведомление о балансе отправлено в Kafka: topic={}, offset={}",
+                                kafkaResult.getProducerRecord().topic(), kafkaResult.getRecordMetadata().offset());
+                    }
+                });
 
-                return new AccountInfoDto(
-                        account.getName(),
-                        account.getBirthdate().format(DATE_FORMATTER),
-                        account.getBalance()
-                );
-            } catch (OptimisticLockingFailureException e) {
-                if (retries == 0) {
-                    throw new RuntimeException("Не удалось обновить баланс из-за конкурентного доступа", e);
-                }
-                try {
-                    Thread.sleep(50);
-                } catch (InterruptedException ignored) {
-
-                }
-            }
-        }
-        throw new IllegalStateException("Неизвестная ошибка при обновлении баланса");
+        return result;
     }
 
     /**
-     * Получение сущности аккаунта по логину (для внутреннего использования).
+     * Получение сущности аккаунта по логину.
      */
     public Account getAccountEntity(String login) {
         return accountRepository.findByLogin(login)

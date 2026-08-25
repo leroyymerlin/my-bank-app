@@ -92,7 +92,7 @@ public class GatewayClient {
                 "name", name,
                 "birthdate", birthdate.toString()
         );
-        return restClient.post()
+        return restClient.put()
                 .uri("/api/accounts/update")
                 .header("Authorization", "Bearer " + token)
                 .body(body)

@@ -1,0 +1,31 @@
+apiVersion: v2
+generated: "2026-08-22T00:00:00Z"
+dependencies:
+  - name: kafka
+    version: 1.0.0
+    repository: file://./kafka
+    condition: kafka.enabled
+  - name: accounts
+    version: 1.0.0
+    repository: file://./accounts
+    condition: accounts.enabled
+  - name: cash
+    version: 1.0.0
+    repository: file://./cash
+    condition: cash.enabled
+  - name: transfer
+    version: 1.0.0
+    repository: file://./transfer
+    condition: transfer.enabled
+  - name: notifications
+    version: 1.0.0
+    repository: file://./notifications
+    condition: notifications.enabled
+  - name: gateway
+    version: 1.0.0
+    repository: file://./gateway
+    condition: gateway.enabled
+  - name: front
+    version: 1.0.0
+    repository: file://./front
+    condition: front.enabled

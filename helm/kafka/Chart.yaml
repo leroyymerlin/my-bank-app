@@ -1,0 +1,6 @@
+apiVersion: v2
+name: kafka
+description: Helm chart for Apache Kafka (Confluent Platform)
+type: application
+version: 1.0.0
+appVersion: "1.0.0"

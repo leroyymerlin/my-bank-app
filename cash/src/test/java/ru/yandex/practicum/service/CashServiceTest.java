@@ -5,12 +5,14 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.kafka.support.SendResult;
 import ru.yandex.practicum.client.AccountClient;
-import ru.yandex.practicum.client.NotificationClient;
 import ru.yandex.practicum.dto.AccountInfoDto;
 import ru.yandex.practicum.model.CashAction;
 
 import java.math.BigDecimal;
+import java.util.concurrent.CompletableFuture;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -25,7 +27,7 @@ class CashServiceTest {
     private AccountClient accountClient;
 
     @Mock
-    private NotificationClient notificationClient;
+    private KafkaTemplate<String, Object> kafkaTemplate;
 
     @InjectMocks
     private CashService cashService;
@@ -35,48 +37,53 @@ class CashServiceTest {
     private static final BigDecimal TEST_BALANCE = new BigDecimal("1000.00");
 
     @Test
-    void processCash_shouldIncreaseBalance_andSendNotification_onPut() {
+    void processCash_shouldIncreaseBalance_andSendToKafka_onPut() {
         BigDecimal delta = new BigDecimal("500.00");
         BigDecimal expectedBalance = TEST_BALANCE.add(delta);
         AccountInfoDto expected = new AccountInfoDto("Иванов Иван", "1990-01-01", expectedBalance);
-        when(accountClient.changeBalance(TEST_LOGIN, delta)).thenReturn(expected);
+        when(accountClient.changeBalance(eq(TEST_LOGIN), eq(delta))).thenReturn(expected);
+
+        CompletableFuture<SendResult<String, Object>> future = new CompletableFuture<>();
+        future.complete(new SendResult<>(null, null));
+        when(kafkaTemplate.send(anyString(), anyString(), any())).thenReturn(future);
 
         AccountInfoDto result = cashService.processCash(TEST_LOGIN, TEST_AMOUNT, CashAction.PUT);
 
         assertThat(result).isEqualTo(expected);
-        verify(accountClient).changeBalance(TEST_LOGIN, delta);
-        verify(notificationClient).sendNotification(TEST_LOGIN,
-                "Ваш счёт пополнен на " + delta + ". Текущий баланс: " + expectedBalance.setScale(2, BigDecimal.ROUND_HALF_UP));
+        verify(accountClient, times(1)).changeBalance(eq(TEST_LOGIN), eq(delta));
+        verify(kafkaTemplate, times(1)).send(eq("cash-notifications"), eq(TEST_LOGIN), any());
     }
 
     @Test
-    void processCash_shouldDecreaseBalance_andSendNotification_onGet() {
+    void processCash_shouldDecreaseBalance_andSendToKafka_onGet() {
         BigDecimal delta = new BigDecimal("-500.00");
         BigDecimal expectedBalance = TEST_BALANCE.add(delta);
         AccountInfoDto expected = new AccountInfoDto("Иванов Иван", "1990-01-01", expectedBalance);
-        when(accountClient.changeBalance(TEST_LOGIN, delta)).thenReturn(expected);
+        when(accountClient.changeBalance(eq(TEST_LOGIN), eq(delta))).thenReturn(expected);
+
+        CompletableFuture<SendResult<String, Object>> future = new CompletableFuture<>();
+        future.complete(new SendResult<>(null, null));
+        when(kafkaTemplate.send(anyString(), anyString(), any())).thenReturn(future);
 
         AccountInfoDto result = cashService.processCash(TEST_LOGIN, TEST_AMOUNT, CashAction.GET);
 
         assertThat(result).isEqualTo(expected);
-        verify(accountClient).changeBalance(TEST_LOGIN, delta);
-        verify(notificationClient).sendNotification(TEST_LOGIN,
-                "Со счёта снято " + TEST_AMOUNT.setScale(2, BigDecimal.ROUND_HALF_UP) +
-                        ". Текущий баланс: " + expectedBalance.setScale(2, BigDecimal.ROUND_HALF_UP));
+        verify(accountClient, times(1)).changeBalance(eq(TEST_LOGIN), eq(delta));
+        verify(kafkaTemplate, times(1)).send(eq("cash-notifications"), eq(TEST_LOGIN), any());
     }
 
     @Test
     void processCash_shouldThrowException_whenAmountIsZeroOrNegative() {
         assertThatThrownBy(() -> cashService.processCash(TEST_LOGIN, BigDecimal.valueOf(0), CashAction.PUT))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("Сумма должна быть положительной");
+                .hasMessage("Amount must be positive");
 
         assertThatThrownBy(() -> cashService.processCash(TEST_LOGIN, BigDecimal.valueOf(-100), CashAction.GET))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("Сумма должна быть положительной");
+                .hasMessage("Amount must be positive");
 
         verifyNoInteractions(accountClient);
-        verifyNoInteractions(notificationClient);
+        verifyNoInteractions(kafkaTemplate);
     }
 
     @Test
@@ -89,7 +96,20 @@ class CashServiceTest {
                 .hasMessageContaining("Ошибка при изменении баланса")
                 .hasCause(clientException);
 
-        verify(accountClient).changeBalance(TEST_LOGIN, TEST_AMOUNT);
-        verify(notificationClient, never()).sendNotification(anyString(), anyString());
+        verify(accountClient, times(1)).changeBalance(eq(TEST_LOGIN), eq(TEST_AMOUNT));
+        verify(kafkaTemplate, never()).send(anyString(), anyString(), any());
+    }
+
+    @Test
+    void processCash_withNullAction_shouldThrowExceptionAndNotCallAccountClient() {
+        String login = "user";
+        BigDecimal amount = BigDecimal.valueOf(100);
+
+        assertThatThrownBy(() -> cashService.processCash(login, amount, null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Action must not be null");
+
+        verify(accountClient, never()).changeBalance(login, amount);
+        verify(kafkaTemplate, never()).send("cash-notifications", login, null);
     }
 }
