@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: zipkin
+  namespace: {{ .Values.global.namespace | default "my-bank-app" }}
+spec:
+  type: {{ .Values.zipkin.service.type }}
+  ports:
+    - port: {{ .Values.zipkin.service.port }}
+      targetPort: 9411
+      protocol: TCP
+      name: http
+  selector:
+    app: zipkin

@@ -1,6 +1,8 @@
 package ru.yandex.practicum.service;
 
 import lombok.extern.slf4j.Slf4j;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import ru.yandex.practicum.client.AccountClient;
@@ -16,10 +18,14 @@ public class TransferService {
 
     private final AccountClient accountClient;
     private final KafkaTemplate<String, NotificationEvent> kafkaTemplate;
+    private final MeterRegistry meterRegistry;
 
-    public TransferService(AccountClient accountClient, KafkaTemplate<String, NotificationEvent> kafkaTemplate) {
+    public TransferService(AccountClient accountClient,
+                           KafkaTemplate<String, NotificationEvent> kafkaTemplate,
+                           MeterRegistry meterRegistry) {
         this.accountClient = accountClient;
         this.kafkaTemplate = kafkaTemplate;
+        this.meterRegistry = meterRegistry;
     }
 
     /**
@@ -44,6 +50,19 @@ public class TransferService {
             senderAfterWithdraw = accountClient.changeBalance(fromLogin, formattedAmount.negate());
             log.info("Списано {} со счёта {}", formattedAmount, fromLogin);
         } catch (Exception e) {
+            log.error("Ошибка при списании со счёта отправителя {}: {}", fromLogin, e.getMessage());
+            try {
+                Counter.builder("transfer_failures")
+                        .tag("fromLogin", fromLogin)
+                        .tag("toLogin", toLogin)
+                        .tag("stage", "withdrawal")
+                        .tag("reason", e.getClass().getSimpleName())
+                        .description("Количество неуспешных попыток перевода денег (этапа списания)")
+                        .register(meterRegistry)
+                        .increment();
+            } catch (Exception metricsEx) {
+                log.warn("Не удалось записать метрику: {}", metricsEx.getMessage());
+            }
             throw new RuntimeException("Ошибка при списании со счёта отправителя: " + e.getMessage(), e);
         }
 
@@ -51,7 +70,19 @@ public class TransferService {
             accountClient.changeBalance(toLogin, formattedAmount);
             log.info("Зачислено {} на счёт {}", formattedAmount, toLogin);
         } catch (Exception e) {
-            log.error("Ошибка при зачислении получателю, выполняем откат", e);
+            log.error("Ошибка при зачислении получателю {}, выполняем откат", toLogin, e);
+            try {
+                Counter.builder("transfer_failures")
+                        .tag("fromLogin", fromLogin)
+                        .tag("toLogin", toLogin)
+                        .tag("stage", "deposit")
+                        .tag("reason", e.getClass().getSimpleName())
+                        .description("Количество неуспешных попыток перевода денег (этапа зачисления)")
+                        .register(meterRegistry)
+                        .increment();
+            } catch (Exception metricsEx) {
+                log.warn("Не удалось записать метрику: {}", metricsEx.getMessage());
+            }
             try {
                 accountClient.changeBalance(fromLogin, formattedAmount);
                 log.info("Выполнен откат: деньги возвращены отправителю {}", fromLogin);
@@ -61,11 +92,6 @@ public class TransferService {
             }
             throw new RuntimeException("Перевод не выполнен: ошибка при зачислении получателю", e);
         }
-
-        String senderMessage = "Вы перевели " + formattedAmount +
-                " пользователю " + toLogin +
-                ". Новый баланс: " + senderAfterWithdraw.getBalance().setScale(2, BigDecimal.ROUND_HALF_UP);
-        String receiverMessage = "Вы получили перевод " + formattedAmount + " от " + fromLogin;
 
         NotificationEvent senderEvent = NotificationEventFactory.createTransferSent(
                 fromLogin, toLogin, formattedAmount.toString());

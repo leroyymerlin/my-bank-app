@@ -1,0 +1,12 @@
+cluster.name: elk-cluster
+node.name: elasticsearch-1
+network.host: 0.0.0.0
+http.port: 9200
+http.cors.enabled: true
+http.cors.allow-origin: "*"
+http.cors.allow-headers: Authorization,X-Requested-With,Content-Length,Content-Type
+xpack.security.enabled: false
+discovery.type: single-node
+path.data: /usr/share/elasticsearch/data
+path.logs: /usr/share/elasticsearch/logs
+bootstrap.memory_lock: true

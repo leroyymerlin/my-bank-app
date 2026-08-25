@@ -1,0 +1,86 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-alertmanager
+  namespace: {{ .Values.global.namespace | default "my-bank-app" }}
+  labels:
+    app: alertmanager
+spec:
+  replicas: {{ .Values.alertmanager.replicaCount }}
+  selector:
+    matchLabels:
+      app: alertmanager
+  template:
+    metadata:
+      labels:
+        app: alertmanager
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9093"
+    spec:
+      containers:
+        - name: alertmanager
+          image: "prom/alertmanager:{{ .Values.alertmanager.image.tag | default "v0.27.0" }}"
+          imagePullPolicy: {{ .Values.global.imagePullPolicy | default "IfNotPresent" }}
+          args:
+            - "--config.file=/etc/alertmanager/alertmanager.yml"
+          ports:
+            - containerPort: 9093
+              name: http
+          resources:
+            requests:
+              memory: {{ .Values.alertmanager.resources.requests.memory }}
+              cpu: {{ .Values.alertmanager.resources.requests.cpu }}
+            limits:
+              memory: {{ .Values.alertmanager.resources.limits.memory }}
+              cpu: {{ .Values.alertmanager.resources.limits.cpu }}
+          volumeMounts:
+            - name: config
+              mountPath: /etc/alertmanager
+            - name: data
+              mountPath: /alertmanager
+      volumes:
+        - name: config
+          configMap:
+            name: {{ .Release.Name }}-alertmanager-config
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ .Release.Name }}-alertmanager-pvc
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-alertmanager-config
+  namespace: {{ .Values.global.namespace | default "my-bank-app" }}
+data:
+  alertmanager.yml: |
+{{ .Values.alertmanager.config | toYaml | indent 4 }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ .Release.Name }}-alertmanager-pvc
+  namespace: {{ .Values.global.namespace | default "my-bank-app" }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.alertmanager.persistence.size }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: alertmanager
+  namespace: {{ .Values.global.namespace | default "my-bank-app" }}
+  labels:
+    app: alertmanager
+spec:
+  type: {{ .Values.alertmanager.service.type }}
+  ports:
+    - port: {{ .Values.alertmanager.service.port }}
+      targetPort: 9093
+      protocol: TCP
+      name: http
+  selector:
+    app: alertmanager

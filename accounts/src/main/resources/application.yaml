@@ -30,6 +30,8 @@ spring:
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
       acks: all
       retries: 3
+      properties:
+        interceptor.classes: ru.yandex.practicum.config.TracingKafkaProducerInterceptor
 
   security:
     oauth2:
@@ -55,6 +57,33 @@ logging:
   level:
     org.springframework.security: DEBUG
     org.apache.kafka: DEBUG
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} -- %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} -- %msg%n"
+  file:
+    name: /var/log/accounts-service.log
+
+management:
+  tracing:
+    enabled: true
+    sampling:
+      probability: 1.0
+  observations:
+    keyvalues:
+      service.name: accounts-service
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+      show-components: always
+    prometheus:
+      enabled: true
+
+zipkin:
+  base-url: http://zipkin:9411
 
 # Configuration для retry обновления баланса
 balance:

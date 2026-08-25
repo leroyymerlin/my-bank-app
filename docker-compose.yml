@@ -43,6 +43,135 @@ services:
     networks:
       - app-network
 
+  zipkin:
+    image: openzipkin/zipkin:latest
+    container_name: zipkin
+    ports:
+      - "9411:9411"
+    environment:
+      - STORAGE_TYPE=mem
+    volumes:
+      - zipkin_data:/app/zipkin-data
+    networks:
+      - app-network
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./prometheus/alerts.yml:/etc/prometheus/alerts.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=15d'
+      - '--web.enable-lifecycle'
+    depends_on:
+      - gateway
+    networks:
+      - app-network
+
+  alertmanager:
+    image: prom/alertmanager:latest
+    container_name: alertmanager
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./prometheus/alertmanager.yml:/etc/alertmanager/alertmanager.yml
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+    depends_on:
+      - prometheus
+    networks:
+      - app-network
+  loki:
+    image: grafana/loki:latest
+    container_name: loki
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./elk/loki/loki-config.yml:/etc/loki/local-config.yaml
+      - loki_data:/loki
+    command: -config.file=/etc/loki/local-config.yaml
+    networks:
+      - app-network
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+    depends_on:
+      - prometheus
+      - loki
+    networks:
+      - app-network
+
+  elasticsearch:
+    image: elasticsearch:8.13.0
+    container_name: elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    ports:
+      - "9200:9200"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+      - ./elk/elasticsearch/elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml
+    networks:
+      - app-network
+
+  logstash:
+    image: logstash:8.13.0
+    container_name: logstash
+    ports:
+      - "5000:5000"
+      - "5001:5001"
+      - "5044:5044"
+    volumes:
+      - ./elk/logstash/logstash.yml:/usr/share/logstash/config/logstash.yml
+      - ./elk/logstash/logstash.conf:/usr/share/logstash/pipeline/logstash.conf
+    depends_on:
+      - elasticsearch
+    networks:
+      - app-network
+
+  kibana:
+    image: kibana:8.13.0
+    container_name: kibana
+    ports:
+      - "5601:5601"
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+    volumes:
+      - ./elk/kibana/kibana.yml:/usr/share/kibana/config/kibana.yml
+    depends_on:
+      - elasticsearch
+    networks:
+      - app-network
+
+  filebeat:
+    image: elastic/filebeat:8.13.0
+    container_name: filebeat
+    user: root
+    volumes:
+      - ./elk/filebeat/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on:
+      - logstash
+    networks:
+      - app-network
+
   # ========== МИКРОСЕРВИСЫ ==========
 
   accounts:
@@ -58,11 +187,14 @@ services:
       SPRING_SECURITY_OAUTH2_CLIENT_PROVIDER_NOTIFICATION_CLIENT_TOKEN_URI: http://keycloak:8080/realms/myrealm/protocol/openid-connect/token
       NOTIFICATION_SERVICE_URL: http://gateway:8081
       SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      LOGSTASH_HOST: logstash
+      LOGSTASH_PORT: 5000
     depends_on:
-      postgres:
-        condition: service_healthy
-      keycloak:
-        condition: service_healthy
+      - postgres
+      - keycloak
+      - logstash
+    volumes:
+      - ./accounts/logs:/var/log/accounts-service-logs
     networks:
       - app-network
 
@@ -76,11 +208,14 @@ services:
       SPRING_SECURITY_OAUTH2_CLIENT_PROVIDER_CASH_CLIENT_TOKEN_URI: http://keycloak:8080/realms/myrealm/protocol/openid-connect/token
       ACCOUNT_SERVICE_URL: http://gateway:8081
       NOTIFICATION_SERVICE_URL: http://gateway:8081
+      LOGSTASH_HOST: logstash
+      LOGSTASH_PORT: 5000
     depends_on:
-      keycloak:
-        condition: service_healthy
-      gateway:
-        condition: service_started
+      - keycloak
+      - gateway
+      - logstash
+    volumes:
+      - ./cash/logs:/var/log/cash-service-logs
     networks:
       - app-network
 
@@ -94,11 +229,14 @@ services:
       SPRING_SECURITY_OAUTH2_CLIENT_PROVIDER_TRANSFER_CLIENT_TOKEN_URI: http://keycloak:8080/realms/myrealm/protocol/openid-connect/token
       ACCOUNT_SERVICE_URL: http://gateway:8081
       NOTIFICATION_SERVICE_URL: http://gateway:8081
+      LOGSTASH_HOST: logstash
+      LOGSTASH_PORT: 5000
     depends_on:
-      keycloak:
-        condition: service_healthy
-      gateway:
-        condition: service_started
+      - keycloak
+      - gateway
+      - logstash
+    volumes:
+      - ./transfer/logs:/var/log/transfer-service-logs
     networks:
       - app-network
 
@@ -109,9 +247,13 @@ services:
     container_name: notifications
     environment:
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: http://keycloak:8080/realms/myrealm
+      LOGSTASH_HOST: logstash
+      LOGSTASH_PORT: 5000
     depends_on:
-      keycloak:
-        condition: service_healthy
+      - keycloak
+      - logstash
+    volumes:
+      - ./notifications/logs:/var/log/notifications-service-logs
     networks:
       - app-network
 
@@ -125,8 +267,14 @@ services:
       SPRING_CLOUD_GATEWAY_ROUTES_1_URI: http://cash:8083
       SPRING_CLOUD_GATEWAY_ROUTES_2_URI: http://transfer:8084
       SPRING_CLOUD_GATEWAY_ROUTES_3_URI: http://notifications:8085
+      LOGSTASH_HOST: logstash
+      LOGSTASH_PORT: 5000
     ports:
       - "8081:8081"
+    depends_on:
+      - logstash
+    volumes:
+      - ./gateway/logs:/var/log/gateway-service-logs
     networks:
       - app-network
 
@@ -138,13 +286,16 @@ services:
     environment:
       GATEWAY_URL: http://gateway:8081
       SPRING_SECURITY_OAUTH2_CLIENT_PROVIDER_KEYCLOAK_ISSUER_URI: http://keycloak:8080/realms/myrealm
+      LOGSTASH_HOST: logstash
+      LOGSTASH_PORT: 5000
     ports:
       - "8080:8080"
     depends_on:
-      gateway:
-        condition: service_started
-      keycloak:
-        condition: service_healthy
+      - gateway
+      - keycloak
+      - logstash
+    volumes:
+      - ./front/logs:/var/log/front-service-logs
     networks:
       - app-network
 
@@ -154,3 +305,10 @@ networks:
 
 volumes:
   postgres_data:
+  prometheus_data:
+  grafana_data:
+  elasticsearch_data:
+  zipkin_data:
+  loki_data:
+  kafka_data:
+  zookeeper_data:

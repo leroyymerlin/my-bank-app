@@ -1,0 +1,7 @@
+server.name: kibana
+server.host: "0.0.0.0"
+elasticsearch.hosts: ["http://elasticsearch:9200"]
+elasticsearch.requestTimeout: 30000
+logging.verbose: false
+xpack.security.enabled: false
+xpack.encryptedSavedObjects.encryptionKey: "encryption-key-1234567890123456"

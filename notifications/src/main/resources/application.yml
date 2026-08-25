@@ -14,6 +14,7 @@ spring:
       value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
       properties:
         spring.json.trusted.packages: "*"
+        interceptor.classes: ru.yandex.practicum.config.TracingKafkaConsumerInterceptor
       enable-auto-commit: false
 
   security:
@@ -30,3 +31,25 @@ logging:
   level:
     org.springframework.security: DEBUG
     org.apache.kafka: DEBUG
+
+management:
+  tracing:
+    enabled: true
+    sampling:
+      probability: 1.0
+  observations:
+    keyvalues:
+      service.name: notifications-service
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+      show-components: always
+    prometheus:
+      enabled: true
+
+zipkin:
+  base-url: http://zipkin:9411

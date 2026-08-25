@@ -1,5 +1,6 @@
 package ru.yandex.practicum.service;
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import ru.yandex.practicum.dto.NotificationRequest;
@@ -12,7 +13,7 @@ class NotificationServiceTest {
 
     @BeforeEach
     void setUp() {
-        notificationService = new NotificationService(new ProcessedEventsStorage());
+        notificationService = new NotificationService(new ProcessedEventsStorage(), new SimpleMeterRegistry());
     }
 
     @Test

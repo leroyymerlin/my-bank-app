@@ -1,6 +1,8 @@
 package ru.yandex.practicum.service;
 
 import lombok.extern.slf4j.Slf4j;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import ru.yandex.practicum.client.AccountClient;
@@ -18,10 +20,14 @@ public class CashService {
 
     private final AccountClient accountClient;
     private final KafkaTemplate<String, NotificationEvent> kafkaTemplate;
+    private final MeterRegistry meterRegistry;
 
-    public CashService(AccountClient accountClient, KafkaTemplate<String, NotificationEvent> kafkaTemplate) {
+    public CashService(AccountClient accountClient,
+                       KafkaTemplate<String, NotificationEvent> kafkaTemplate,
+                       MeterRegistry meterRegistry) {
         this.accountClient = accountClient;
         this.kafkaTemplate = kafkaTemplate;
+        this.meterRegistry = meterRegistry;
     }
 
     public AccountInfoDto processCash(String login, BigDecimal amount, CashAction action) {
@@ -58,6 +64,18 @@ public class CashService {
         try {
             updatedAccount = accountClient.changeBalance(login, delta);
         } catch (Exception e) {
+            log.error("Ошибка при изменении баланса для {}: {}", login, e.getMessage());
+            try {
+                Counter.builder("cash_withdrawal_failures")
+                        .tag("login", login)
+                        .tag("action", action.name())
+                        .tag("reason", e.getClass().getSimpleName())
+                        .description("Количество неуспешных попыток снятия/пополнения денег")
+                        .register(meterRegistry)
+                        .increment();
+            } catch (Exception metricsEx) {
+                log.warn("Не удалось записать метрику: {}", metricsEx.getMessage());
+            }
             throw new RuntimeException("Ошибка при изменении баланса: " + e.getMessage(), e);
         }
 

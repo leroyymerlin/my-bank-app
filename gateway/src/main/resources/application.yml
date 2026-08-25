@@ -42,3 +42,25 @@ logging:
   level:
     org.springframework.cloud.gateway: DEBUG
     org.springframework.http.server.reactive: DEBUG
+
+management:
+  tracing:
+    enabled: true
+    sampling:
+      probability: 1.0
+  observations:
+    keyvalues:
+      service.name: gateway-service
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+      show-components: always
+    prometheus:
+      enabled: true
+
+zipkin:
+  base-url: http://zipkin:9411

@@ -188,3 +188,414 @@ front:
     limits:
       memory: "256Mi"
       cpu: "200m"
+
+# ===== Zipkin =====
+zipkin:
+  enabled: true
+  replicaCount: 1
+  service:
+    type: ClusterIP
+    port: 9411
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "125m"
+    limits:
+      memory: "1Gi"
+      cpu: "500m"
+
+# ===== Prometheus =====
+prometheus:
+  enabled: true
+  replicaCount: 1
+  image:
+    tag: "v2.51.0"
+  scrapeInterval: "15s"
+  evaluationInterval: "15s"
+  scrapeTimeout: "10s"
+  retention: "15d"
+  service:
+    type: ClusterIP
+    port: 9090
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "125m"
+    limits:
+      memory: "1Gi"
+      cpu: "500m"
+  persistence:
+    size: 5Gi
+  scrapeTargets:
+    - name: "accounts-service"
+      metricsPath: "/actuator/prometheus"
+      target: "accounts:8082"
+    - name: "cash-service"
+      metricsPath: "/actuator/prometheus"
+      target: "cash:8083"
+    - name: "transfer-service"
+      metricsPath: "/actuator/prometheus"
+      target: "transfer:8084"
+    - name: "notifications-service"
+      metricsPath: "/actuator/prometheus"
+      target: "notifications:8085"
+    - name: "gateway-service"
+      metricsPath: "/actuator/prometheus"
+      target: "gateway:8081"
+    - name: "front-service"
+      metricsPath: "/actuator/prometheus"
+      target: "front:8080"
+  alertRules: |
+    groups:
+      - name: microservice-alerts
+        rules:
+          - alert: High5xxErrorRate
+            expr: |
+              sum(rate(http_server_requests_seconds_count{status=~"5.."}[5m]))
+              by (service)
+              /
+              sum(rate(http_server_requests_seconds_count[5m]))
+              by (service)
+              > 0.10
+            for: 5m
+            labels:
+              severity: critical
+            annotations:
+              summary: "High 5xx error rate on {{ $labels.service }}"
+              description: "5xx error rate exceeds 10% for 5 minutes on {{ $labels.service }}: {{ $value | humanizePercentage }}"
+
+          - alert: High4xxErrorRate
+            expr: |
+              sum(rate(http_server_requests_seconds_count{status=~"4.."}[5m]))
+              by (service)
+              /
+              sum(rate(http_server_requests_seconds_count[5m]))
+              by (service)
+              > 0.30
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "High 4xx error rate on {{ $labels.service }}"
+              description: "4xx error rate exceeds 30% for 5 minutes on {{ $labels.service }}: {{ $value | humanizePercentage }}"
+
+          - alert: HighRequestLatencyP95
+            expr: |
+              histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket[5m])) by (le, service))
+              > 1.0
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "High p95 latency on {{ $labels.service }}"
+              description: "p95 latency exceeds 1s on {{ $labels.service }}: {{ $value | humanizeDuration }}"
+
+          - alert: HighRequestLatencyP99
+            expr: |
+              histogram_quantile(0.99, sum(rate(http_server_requests_seconds_bucket[5m])) by (le, service))
+              > 3.0
+            for: 5m
+            labels:
+              severity: critical
+            annotations:
+              summary: "High p99 latency on {{ $labels.service }}"
+              description: "p99 latency exceeds 3s on {{ $labels.service }}: {{ $value | humanizeDuration }}"
+
+          - alert: ZeroRequestRate
+            expr: |
+              sum(rate(http_server_requests_seconds_count[5m])) by (service) == 0
+            for: 5m
+            labels:
+              severity: critical
+            annotations:
+              summary: "No requests to {{ $labels.service }}"
+              description: "Service {{ $labels.service }} is not processing requests for 5 minutes."
+
+          - alert: HighJvmMemoryUsage
+            expr: |
+              jvm_memory_used_bytes{area="heap"} / jvm_memory_max_bytes{area="heap"} > 0.80
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "High JVM memory on {{ $labels.service }}"
+              description: "Heap memory exceeds 80% on {{ $labels.service }}: {{ $value | humanizePercentage }}"
+
+          - alert: CriticalJvmMemoryUsage
+            expr: |
+              jvm_memory_used_bytes{area="heap"} / jvm_memory_max_bytes{area="heap"} > 0.90
+            for: 5m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Critical JVM memory on {{ $labels.service }}"
+              description: "Heap memory exceeds 90% on {{ $labels.service }}: {{ $value | humanizePercentage }}"
+
+          - alert: HighFailedCashWithdrawals
+            expr: |
+              sum(rate(cash_withdrawal_failures_total[5m])) by (login, service) > 5
+            for: 2m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Many failed cash withdrawals for {{ $labels.login }}"
+              description: "User {{ $labels.login }} has >5 failed cash withdrawal attempts in 5 minutes on {{ $labels.service }}."
+
+          - alert: HighFailedTransfers
+            expr: |
+              sum(rate(transfer_failures_total[5m])) by (fromLogin, toLogin, service) > 5
+            for: 2m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Many failed transfers {{ $labels.fromLogin }} -> {{ $labels.toLogin }}"
+              description: "Transfers between {{ $labels.fromLogin }} and {{ $labels.toLogin }} failed >5 times in 5 minutes on {{ $labels.service }}."
+
+          - alert: HighFailedNotifications
+            expr: |
+              sum(rate(notification_send_failures_total[5m])) by (login, service) > 5
+            for: 2m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Many failed notifications for {{ $labels.login }}"
+              description: "Failed notification sends for {{ $labels.login }} >5 in 5 minutes on {{ $labels.service }}."
+
+          - alert: ServiceDown
+            expr: up == 0
+            for: 1m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Service {{ $labels.instance }} is down"
+              description: "Service {{ $labels.instance }} ({{ $labels.service }}) has been down for 1 minute."
+
+          - alert: HighGcTime
+            expr: |
+              sum(rate(jvm_gc_pause_seconds_sum[5m])) by (service) > 1.0
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "High GC time on {{ $labels.service }}"
+              description: "GC time exceeds 1s/min on {{ $labels.service }}."
+
+# ===== AlertManager =====
+alertmanager:
+  enabled: true
+  replicaCount: 1
+  image:
+    tag: "v0.27.0"
+  service:
+    type: ClusterIP
+    port: 9093
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "50m"
+    limits:
+      memory: "256Mi"
+      cpu: "200m"
+  persistence:
+    size: 1Gi
+  config: |
+    global:
+      resolve_timeout: 5m
+    route:
+      group_by: ['alertname', 'service']
+      group_wait: 10s
+      group_interval: 10s
+      repeat_interval: 5m
+      receiver: 'default-receiver'
+      routes:
+        - match:
+            severity: critical
+          receiver: 'critical-receiver'
+          repeat_interval: 1m
+        - match:
+            severity: warning
+          receiver: 'default-receiver'
+          repeat_interval: 5m
+    receivers:
+      - name: 'default-receiver'
+        webhook_configs:
+          - url: 'http://localhost:5001/webhook'
+            send_resolved: true
+      - name: 'critical-receiver'
+        webhook_configs:
+          - url: 'http://localhost:5001/webhook'
+            send_resolved: true
+    inhibit_rules:
+      - source_match:
+          severity: 'critical'
+        target_match:
+          severity: 'warning'
+        equal: ['alertname', 'service']
+
+# ===== ELK Stack =====
+elk:
+  enabled: true
+  elasticsearch:
+    enabled: true
+    replicaCount: 1
+    image:
+      tag: "8.13.0"
+    service:
+      type: ClusterIP
+      port: 9200
+    resources:
+      requests:
+        memory: "512Mi"
+        cpu: "250m"
+      limits:
+        memory: "1Gi"
+        cpu: "500m"
+    persistence:
+      size: 5Gi
+    config: |
+      cluster.name: elk-cluster
+      node.name: elasticsearch-1
+      network.host: 0.0.0.0
+      http.port: 9200
+      http.cors.enabled: true
+      http.cors.allow-origin: "*"
+      http.cors.allow-headers: Authorization,X-Requested-With,Content-Length,Content-Type
+      xpack.security.enabled: false
+      discovery.type: single-node
+      path.data: /usr/share/elasticsearch/data
+      path.logs: /usr/share/elasticsearch/logs
+      bootstrap.memory_lock: true
+  logstash:
+    enabled: true
+    replicaCount: 1
+    image:
+      tag: "8.13.0"
+    service:
+      type: ClusterIP
+      port: 5000
+    resources:
+      requests:
+        memory: "256Mi"
+        cpu: "125m"
+      limits:
+        memory: "512Mi"
+        cpu: "250m"
+    config: |
+      pipeline.workers: 2
+      pipeline.batch.size: 125
+      pipeline.batch.delay: 50
+    pipeline: |
+      input {
+        tcp {
+          port => 5000
+          codec => json
+        }
+        udp {
+          port => 5001
+          codec => json
+        }
+      }
+      filter {
+        grok {
+          match => {
+            "message" => "%{TIMESTAMP_ISO8601:timestamp} %{LOGLEVEL:loglevel}%{SPACE}[%{DATA:thread}]%{SPACE}(?:%{JAVACLASS:logger})?%{SPACE}--%{SPACE}%{GREEDYDATA:log_message}"
+          }
+        }
+        mutate {
+          uppercase => ["loglevel"]
+        }
+        date {
+          match => ["timestamp", "ISO8601", "yyyy-MM-dd HH:mm:ss.SSS"]
+          target => "@timestamp"
+        }
+        mutate {
+          gsub => [
+            "log_message", "([0-9]+\\.[0-9]{2})", "***"
+          ]
+        }
+      }
+      output {
+        elasticsearch {
+          hosts => ["elasticsearch:9200"]
+          index => "banking-logs-%{+YYYY.MM.dd}"
+        }
+        stdout {
+          codec => rubydebug
+        }
+      }
+  kibana:
+    enabled: true
+    replicaCount: 1
+    image:
+      tag: "8.13.0"
+    service:
+      type: ClusterIP
+      port: 5601
+    resources:
+      requests:
+        memory: "256Mi"
+        cpu: "125m"
+      limits:
+        memory: "512Mi"
+        cpu: "250m"
+    config: |
+      server.name: kibana
+      server.host: "0.0.0.0"
+      elasticsearch.hosts: ["http://elasticsearch:9200"]
+      elasticsearch.requestTimeout: 30000
+      logging.verbose: false
+      xpack.security.enabled: false
+  loki:
+    enabled: true
+    replicaCount: 1
+    image:
+      tag: "latest"
+    service:
+      type: ClusterIP
+      port: 3100
+    resources:
+      requests:
+        memory: "128Mi"
+        cpu: "50m"
+      limits:
+        memory: "256Mi"
+        cpu: "100m"
+    config: |
+      auth_enabled: false
+      server:
+        http_listen_port: 3100
+      ingester:
+        lifecycler:
+          address: 127.0.0.1
+          ring:
+            kvstore:
+              store: inmemory
+            replication_factor: 1
+          final_sleep: 0s
+        chunk_idle_period: 5m
+        chunk_retain_period: 30s
+      schema_config:
+        configs:
+          - from: 2020-10-24
+            store: boltdb-shipper
+            object_store: filesystem
+            schema: v11
+            index:
+              prefix: index_
+              period: 168h
+      storage_config:
+        boltdb_shipper:
+          active_index_directory: /loki/boltdb-shipper-active
+          cache_location: /loki/boltdb-shipper-cache
+          shared_store: filesystem
+        filesystem:
+          directory: /loki/chunks
+      compactor:
+        working_directory: /loki/boltdb-shipper
+        enabled: true
+        retension_enabled: true
+      limits_config:
+        reject_old_samples: true
+        reject_old_samples_max_age: 168h
+      analytics:
+        reporting_enabled: false

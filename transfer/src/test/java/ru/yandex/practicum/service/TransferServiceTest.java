@@ -1,5 +1,7 @@
 package ru.yandex.practicum.service;
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -29,6 +31,9 @@ class TransferServiceTest {
 
     @InjectMocks
     private TransferService transferService;
+
+    @Mock
+    private SimpleMeterRegistry meterRegistry;
 
     private static final String FROM_LOGIN = "sender";
     private static final String TO_LOGIN = "recipient";

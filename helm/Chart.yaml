@@ -38,3 +38,15 @@ dependencies:
     version: 24.0.0
     repository: https://charts.bitnami.com/bitnami
     condition: global.keycloak.enabled
+  - name: zipkin
+    version: 0.1.0
+    repository: file://./zipkin
+    condition: zipkin.enabled
+  - name: prometheus
+    version: 1.0.0
+    repository: file://./prometheus
+    condition: prometheus.enabled
+  - name: elk
+    version: 1.0.0
+    repository: file://./elk
+    condition: elk.enabled

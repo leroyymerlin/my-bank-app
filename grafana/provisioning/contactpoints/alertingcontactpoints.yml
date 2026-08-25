@@ -1,0 +1,11 @@
+apiVersion: 1
+
+contactPoints:
+  - orgId: 1
+    name: Default
+    receivers:
+      - uid: default-receiver
+        type: alertmanager
+        settings:
+          alertmanagerName: internal
+          alertmanagerContactPointUids: []

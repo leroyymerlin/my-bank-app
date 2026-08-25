@@ -1,0 +1,56 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  scrape_timeout: 10s
+
+rule_files:
+  - "alerts.yml"
+
+scrape_configs:
+  # Accounts Service
+  - job_name: 'accounts-service'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['accounts:8082']
+        labels:
+          service: 'accounts-service'
+
+  # Cash Service
+  - job_name: 'cash-service'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['cash:8083']
+        labels:
+          service: 'cash-service'
+
+  # Transfer Service
+  - job_name: 'transfer-service'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['transfer:8084']
+        labels:
+          service: 'transfer-service'
+
+  # Notifications Service
+  - job_name: 'notifications-service'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['notifications:8085']
+        labels:
+          service: 'notifications-service'
+
+  # Gateway Service
+  - job_name: 'gateway-service'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['gateway:8081']
+        labels:
+          service: 'gateway-service'
+
+  # Front Service
+  - job_name: 'front-service'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['front:8080']
+        labels:
+          service: 'front-service'

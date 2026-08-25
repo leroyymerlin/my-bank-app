@@ -1,0 +1,54 @@
+{
+  "title": "Banking Microservices Logs Dashboard",
+  "hits": 0,
+  "description": "Дашборд для анализа логов микросервисов Banking",
+  "panelsJSON": [
+    {
+      "type": "visualization",
+      "id": "1",
+      "panelIndex": "1",
+      "gridPosition": {
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
+      "embeddableConfig": {},
+      "version": "1"
+    },
+    {
+      "type": "visualization",
+      "id": "2",
+      "panelIndex": "2",
+      "gridPosition": {
+        "x": 12,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
+      "embeddableConfig": {},
+      "version": "1"
+    },
+    {
+      "type": "visualization",
+      "id": "3",
+      "panelIndex": "3",
+      "gridPosition": {
+        "x": 0,
+        "y": 8,
+        "w": 24,
+        "h": 12
+      },
+      "embeddableConfig": {},
+      "version": "1"
+    }
+  ],
+  "timeFrom": "now-24h",
+  "timeTo": "now",
+  "refreshInterval": {
+    "pause": false,
+    "value": 30000
+  },
+  "timezone": "browser",
+  "title": "Banking Microservices Logs Dashboard"
+}

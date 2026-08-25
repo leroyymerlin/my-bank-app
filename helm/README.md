@@ -2,27 +2,6 @@
 
 Зонтичный Helm-чарт для деплоя приложения My Bank в Kubernetes.
 
-## Структура
-
-```
-helm/
-├── Chart.yaml              # Зонтичный чарт (родительский)
-├── values.yaml             # Глобальные значения
-├── accounts/               # Accounts Service + PostgreSQL
-├── cash/                   # Cash Service + PostgreSQL
-├── transfer/               # Transfer Service + PostgreSQL
-├── notifications/          # Notifications Service + PostgreSQL
-├── gateway/                # API Gateway + PostgreSQL
-└── front/                  # Frontend (без БД)
-```
-
-## Требования
-
-- Kubernetes >= 1.28
-- Helm >= 3.12
-- Доступ к кластеру (kubectl конфиг по умолчанию)
-- PV-провайдер (для StatefulSet PostgreSQL)
-
 ## Быстрый старт
 
 ### 1. Установить все сервисы
@@ -52,14 +31,6 @@ helm upgrade my-bank ./helm
 ```bash
 helm uninstall my-bank
 ```
-
-## Конфигурация
-
-| Параметр | Описание | По умолчанию |
-|----------|----------|--------------|
-| `namespace` | namespace для деплоя | `my-bank-app` |
-| `imagePullPolicy` | policy для pull образов | `IfNotPresent` |
-
 ### Accounts Service
 
 | Параметр | Описание | По умолчанию |
@@ -97,50 +68,36 @@ helm uninstall my-bank
 | `postgresql.resources.limits.memory` | Limit памяти | `512Mi` |
 | `postgresql.volumeClaim.storage` | Размер PVC | `1Gi` |
 
-## Ресурсы
+### Prometheus
 
-### Service
+| Параметр | Описание | По умолчанию |
+|----------|----------|--------------|
+| `prometheus.enabled` | Включить Prometheus | `true` |
+| `prometheus.replicaCount` | Количество реплик | `1` |
+| `prometheus.service.type` | Тип сервиса | `ClusterIP` |
+| `prometheus.retention` | Хранение данных | `15d` |
+| `prometheus.persistence.size` | Размер PVC | `5Gi` |
+| `prometheus.scrapeInterval` | Интервал сбора метрик | `15s` |
 
-Каждый сервис (accounts, cash, transfer, notifications, gateway, front) создаёт Service типа ClusterIP для внутреннего взаимодействия.
+### AlertManager
 
-### Deployment
+| Параметр | Описание | По умолчанию |
+|----------|----------|--------------|
+| `alertmanager.enabled` | Включить AlertManager | `true` |
+| `alertmanager.replicaCount` | Количество реплик | `1` |
+| `alertmanager.service.type` | Тип сервиса | `ClusterIP` |
 
-Каждый микросервис создаётся как Deployment с настраиваемым количеством реплик.
+### ELK Stack
 
-### StatefulSet (PostgreSQL)
-
-Каждый микросервис имеет свою PostgreSQL базу данных в StatefulSet с PVC для хранения данных.
-
-## DNS в кластере
-
-Сервисы доступны друг другу по DNS-именам:
-
-```
-{{ .Release.Name }}-accounts:8082
-{{ .Release.Name }}-cash:8083
-{{ .Release.Name }}-transfer:8084
-{{ .Release.Name }}-notifications:8085
-{{ .Release.Name }}-gateway:8081
-{{ .Release.Name }}-postgresql:5432
-```
-
-## Troubleshooting
-
-### Проблема с доступом к PostgreSQL
-
-```bash
-kubectl get pods -n my-bank-app
-kubectl get pvc -n my-bank-app
-```
-
-### Логи контейнера
-
-```bash
-kubectl logs -n my-bank-app -l app=accounts
-```
-
-### Проверка сервисов
-
-```bash
-kubectl get svc -n my-bank-app
-```
+| Параметр | Описание | По умолчанию |
+|----------|----------|--------------|
+| `elk.enabled` | Включить ELK stack | `true` |
+| `elk.elasticsearch.replicaCount` | Количество реплик Elasticsearch | `1` |
+| `elk.elasticsearch.service.type` | Тип сервиса Elasticsearch | `ClusterIP` |
+| `elk.elasticsearch.persistence.size` | Размер PVC для Elasticsearch | `5Gi` |
+| `elk.logstash.replicaCount` | Количество реплик Logstash | `1` |
+| `elk.logstash.service.type` | Тип сервиса Logstash | `ClusterIP` |
+| `elk.kibana.replicaCount` | Количество реплик Kibana | `1` |
+| `elk.kibana.service.type` | Тип сервиса Kibana | `ClusterIP` |
+| `elk.loki.replicaCount` | Количество реплик Loki | `1` |
+| `elk.loki.service.type` | Тип сервиса Loki | `ClusterIP` |

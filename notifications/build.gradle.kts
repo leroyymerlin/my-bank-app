@@ -21,6 +21,14 @@ dependencies {
     implementation("org.springframework.kafka:spring-kafka")
     implementation(project(":notification-contract"))
 
+    implementation("io.micrometer:micrometer-tracing-bridge-brave")
+    implementation("io.zipkin.reporter2:zipkin-reporter-brave")
+    implementation("io.micrometer:micrometer-core")
+
+    implementation("io.micrometer:micrometer-registry-prometheus")
+
+    implementation("net.logstash.logback:logstash-logback-encoder:7.4")
+
     testImplementation(platform("org.junit:junit-bom:5.10.0"))
     testImplementation("org.junit.jupiter:junit-jupiter")
     testImplementation("org.springframework.boot:spring-boot-starter-test")

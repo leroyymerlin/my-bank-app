@@ -1,0 +1,116 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-prometheus
+  namespace: {{ .Values.global.namespace | default "my-bank-app" }}
+  labels:
+    app: prometheus
+spec:
+  replicas: {{ .Values.prometheus.replicaCount }}
+  selector:
+    matchLabels:
+      app: prometheus
+  template:
+    metadata:
+      labels:
+        app: prometheus
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+    spec:
+      containers:
+        - name: prometheus
+          image: "prom/prometheus:{{ .Values.prometheus.image.tag | default "v2.51.0" }}"
+          imagePullPolicy: {{ .Values.global.imagePullPolicy | default "IfNotPresent" }}
+          args:
+            - "--config.file=/etc/prometheus/prometheus.yml"
+            - "--storage.tsdb.path=/prometheus"
+            - "--storage.tsdb.retention.time={{ .Values.prometheus.retention }}"
+            - "--web.enable-lifecycle"
+            - "--web.console.libraries=/etc/prometheus/console_libraries"
+            - "--web.console.templates=/etc/prometheus/consoles"
+          ports:
+            - containerPort: 9090
+              name: http
+          resources:
+            requests:
+              memory: {{ .Values.prometheus.resources.requests.memory }}
+              cpu: {{ .Values.prometheus.resources.requests.cpu }}
+            limits:
+              memory: {{ .Values.prometheus.resources.limits.memory }}
+              cpu: {{ .Values.prometheus.resources.limits.cpu }}
+          volumeMounts:
+            - name: config
+              mountPath: /etc/prometheus
+            - name: data
+              mountPath: /prometheus
+      volumes:
+        - name: config
+          configMap:
+            name: {{ .Release.Name }}-prometheus-config
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ .Release.Name }}-prometheus-pvc
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-prometheus-config
+  namespace: {{ .Values.global.namespace | default "my-bank-app" }}
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: {{ .Values.prometheus.scrapeInterval }}
+      evaluation_interval: {{ .Values.prometheus.evaluationInterval }}
+      scrape_timeout: {{ .Values.prometheus.scrapeTimeout }}
+
+    rule_files:
+      - "/etc/prometheus/alerts.yml"
+
+    scrape_configs:
+{{- range .Values.prometheus.scrapeTargets }}
+      - job_name: '{{ .name }}'
+        metrics_path: '{{ .metricsPath }}'
+        static_configs:
+          - targets: ['{{ .target }}']
+            labels:
+              service: '{{ .name }}'
+{{- end }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-prometheus-alerts
+  namespace: {{ .Values.global.namespace | default "my-bank-app" }}
+data:
+  alerts.yml: |
+{{ .Values.prometheus.alertRules | toYaml | indent 4 }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ .Release.Name }}-prometheus-pvc
+  namespace: {{ .Values.global.namespace | default "my-bank-app" }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.prometheus.persistence.size }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus
+  namespace: {{ .Values.global.namespace | default "my-bank-app" }}
+  labels:
+    app: prometheus
+spec:
+  type: {{ .Values.prometheus.service.type }}
+  ports:
+    - port: {{ .Values.prometheus.service.port }}
+      targetPort: 9090
+      protocol: TCP
+      name: http
+  selector:
+    app: prometheus

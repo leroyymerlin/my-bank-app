@@ -21,3 +21,25 @@ spring:
 
   thymeleaf:
     cache: false
+
+management:
+  tracing:
+    enabled: true
+    sampling:
+      probability: 1.0
+  observations:
+    keyvalues:
+      service.name: front
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+      show-components: always
+    prometheus:
+      enabled: true
+
+zipkin:
+  base-url: http://zipkin:9411
