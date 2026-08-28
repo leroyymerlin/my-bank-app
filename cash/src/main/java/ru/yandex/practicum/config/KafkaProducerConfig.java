@@ -5,7 +5,6 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Profile;
 import org.springframework.kafka.core.DefaultKafkaProducerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.core.ProducerFactory;
@@ -14,6 +13,7 @@ import org.springframework.kafka.support.serializer.JsonSerializer;
 import ru.yandex.practicum.event.NotificationEvent;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @Configuration
@@ -31,11 +31,16 @@ public class KafkaProducerConfig {
         configProps.put(ProducerConfig.ACKS_CONFIG, "all");
         configProps.put(ProducerConfig.RETRIES_CONFIG, 3);
         configProps.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true);
+        // Указываем interceptor класс — Kafka создаст его автоматически
+        configProps.put(ProducerConfig.INTERCEPTOR_CLASSES_CONFIG,
+                List.of(TracingKafkaProducerInterceptor.class.getName()));
+
         return new DefaultKafkaProducerFactory<>(configProps);
     }
 
     @Bean
-    public KafkaTemplate<String, NotificationEvent> kafkaTemplate() {
-        return new KafkaTemplate<>(producerFactory());
+    public KafkaTemplate<String, NotificationEvent> kafkaTemplate(
+            ProducerFactory<String, NotificationEvent> producerFactory) {
+        return new KafkaTemplate<>(producerFactory);
     }
 }

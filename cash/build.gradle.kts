@@ -33,6 +33,7 @@ dependencies {
     implementation("io.micrometer:micrometer-registry-prometheus")
 
     implementation("net.logstash.logback:logstash-logback-encoder:7.4")
+    testImplementation("net.logstash.logback:logstash-logback-encoder:7.4")
 
     testImplementation(platform("org.junit:junit-bom:5.10.0"))
     testImplementation("org.junit.jupiter:junit-jupiter")
@@ -46,6 +47,20 @@ dependencies {
     testImplementation("org.testcontainers:kafka")
 }
 
+val unitTest by tasks.creating(Test::class) {
+    description = "Runs unit tests"
+    group = "verification"
+    
+    testClassesDirs = sourceSets["test"].output.classesDirs
+    classpath = sourceSets["test"].runtimeClasspath
+}
+
 tasks.test {
-    useJUnitPlatform()
+    useJUnitPlatform {
+        // All tests run here including integration
+    }
+}
+
+tasks.check {
+    dependsOn(unitTest, tasks.test)
 }

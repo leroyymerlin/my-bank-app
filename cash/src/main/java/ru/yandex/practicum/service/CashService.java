@@ -70,7 +70,6 @@ public class CashService {
                         .tag("login", login)
                         .tag("action", action.name())
                         .tag("reason", e.getClass().getSimpleName())
-                        .description("Количество неуспешных попыток снятия/пополнения денег")
                         .register(meterRegistry)
                         .increment();
             } catch (Exception metricsEx) {

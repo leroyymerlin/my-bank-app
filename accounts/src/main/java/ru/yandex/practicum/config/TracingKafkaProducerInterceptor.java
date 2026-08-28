@@ -1,9 +1,12 @@
 package ru.yandex.practicum.config;
 
 import brave.propagation.CurrentTraceContext;
+import brave.propagation.TraceContext;
+import io.micrometer.tracing.Tracer;
 import org.apache.kafka.clients.producer.ProducerInterceptor;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -16,7 +19,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
 @Component
-public class TracingKafkaProducerInterceptor<K, V> implements ProducerInterceptor<K, V>, ApplicationContextAware {
+public class TracingKafkaProducerInterceptor<K, V>
+        implements ProducerInterceptor<K, V>, ApplicationContextAware {
 
     private static final Logger log = LoggerFactory.getLogger(TracingKafkaProducerInterceptor.class);
 
@@ -24,18 +28,15 @@ public class TracingKafkaProducerInterceptor<K, V> implements ProducerIntercepto
     private static final String SPAN_ID_HEADER = "X-B3-SpanId";
     private static final String PARENT_SPAN_ID_HEADER = "X-B3-ParentSpanId";
 
-    private static boolean tracingEnabled = false;
-    private static CurrentTraceContext currentTraceContext;
+    private static volatile CurrentTraceContext currentTraceContext;
 
     @Override
     public void setApplicationContext(ApplicationContext ctx) throws BeansException {
         try {
             currentTraceContext = ctx.getBean(CurrentTraceContext.class);
-            tracingEnabled = true;
         } catch (BeansException e) {
-            tracingEnabled = false;
             if (log.isTraceEnabled()) {
-                log.trace("CurrentTraceContext not available, tracing disabled for Kafka producer interceptor: {}", e.getMessage());
+                log.trace("CurrentTraceContext not available: {}", e.getMessage());
             }
         }
     }
@@ -46,16 +47,20 @@ public class TracingKafkaProducerInterceptor<K, V> implements ProducerIntercepto
 
     @Override
     public ProducerRecord<K, V> onSend(ProducerRecord<K, V> record) {
-        if (!tracingEnabled || currentTraceContext == null) {
+        if (currentTraceContext == null) {
             return record;
         }
 
-        brave.propagation.TraceContext traceContext = currentTraceContext.get();
+        TraceContext traceContext = currentTraceContext.get();
         if (traceContext == null) {
             return record;
         }
 
         Headers headers = record.headers();
+        headers.remove(TRACE_ID_HEADER);
+        headers.remove(SPAN_ID_HEADER);
+        headers.remove(PARENT_SPAN_ID_HEADER);
+
         headers.add(TRACE_ID_HEADER, traceContext.traceIdString().getBytes(StandardCharsets.UTF_8));
         headers.add(SPAN_ID_HEADER, traceContext.spanIdString().getBytes(StandardCharsets.UTF_8));
 
@@ -65,7 +70,8 @@ public class TracingKafkaProducerInterceptor<K, V> implements ProducerIntercepto
 
         if (log.isDebugEnabled()) {
             log.debug("Added B3 tracing headers to Kafka record: topic={}, partition={}, traceId={}, spanId={}",
-                    record.topic(), record.partition(), traceContext.traceIdString(), traceContext.spanIdString());
+                    record.topic(), record.partition(),
+                    traceContext.traceIdString(), traceContext.spanIdString());
         }
 
         return record;

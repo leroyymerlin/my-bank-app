@@ -3,7 +3,6 @@ global:
   imagePullPolicy: IfNotPresent
   namespace: my-bank-app
 
-  # ===== PostgreSQL =====
   postgresql:
     enabled: true
     service:
@@ -16,10 +15,6 @@ global:
       limits:
         memory: "512Mi"
         cpu: "250m"
-
-  # ===== Keycloak =====
-  # When global.keycloak.enabled=true, uses the bundled Keycloak chart
-  # When global.keycloak.enabled=false, set issuerUri to external Keycloak URL
   keycloak:
     enabled: true
     service:
@@ -34,7 +29,6 @@ global:
         cpu: "500m"
     issuerUri: ""
 
-# ===== Bitnami Keycloak =====
 keycloak:
   auth:
     adminUser: admin
@@ -193,6 +187,10 @@ front:
 zipkin:
   enabled: true
   replicaCount: 1
+  image:
+    repository: openzipkin/zipkin-slim
+    tag: latest
+    pullPolicy: IfNotPresent
   service:
     type: ClusterIP
     port: 9411
@@ -228,23 +226,29 @@ prometheus:
     size: 5Gi
   scrapeTargets:
     - name: "accounts-service"
+      service: "accounts"
+      port: "8082"
       metricsPath: "/actuator/prometheus"
-      target: "accounts:8082"
     - name: "cash-service"
+      service: "cash"
+      port: "8083"
       metricsPath: "/actuator/prometheus"
-      target: "cash:8083"
     - name: "transfer-service"
+      service: "transfer"
+      port: "8084"
       metricsPath: "/actuator/prometheus"
-      target: "transfer:8084"
     - name: "notifications-service"
+      service: "notifications"
+      port: "8085"
       metricsPath: "/actuator/prometheus"
-      target: "notifications:8085"
     - name: "gateway-service"
+      service: "gateway"
+      port: "8081"
       metricsPath: "/actuator/prometheus"
-      target: "gateway:8081"
     - name: "front-service"
+      service: "front"
+      port: "8080"
       metricsPath: "/actuator/prometheus"
-      target: "front:8080"
   alertRules: |
     groups:
       - name: microservice-alerts
@@ -494,29 +498,40 @@ elk:
           port => 5001
           codec => json
         }
+        beats {
+          port => 5044
+        }
       }
       filter {
-        grok {
-          match => {
-            "message" => "%{TIMESTAMP_ISO8601:timestamp} %{LOGLEVEL:loglevel}%{SPACE}[%{DATA:thread}]%{SPACE}(?:%{JAVACLASS:logger})?%{SPACE}--%{SPACE}%{GREEDYDATA:log_message}"
+        if "microservices" in [host] {
+          grok {
+            match => {
+              "message" => "%{TIMESTAMP_ISO8601:timestamp} %{LOGLEVEL:loglevel}%{SPACE}[%{DATA:thread}]%{SPACE}(?:%{JAVACLASS:logger})?%{SPACE}--%{SPACE}%{GREEDYDATA:log_message}"
+            }
           }
-        }
-        mutate {
-          uppercase => ["loglevel"]
-        }
-        date {
-          match => ["timestamp", "ISO8601", "yyyy-MM-dd HH:mm:ss.SSS"]
-          target => "@timestamp"
+          mutate {
+            uppercase => ["loglevel"]
+          }
+          date {
+            match => ["timestamp", "ISO8601", "yyyy-MM-dd HH:mm:ss.SSS"]
+            target => "@timestamp"
+          }
+          mutate {
+            add_tag => ["spring-boot"]
+          }
         }
         mutate {
           gsub => [
             "log_message", "([0-9]+\\.[0-9]{2})", "***"
           ]
         }
+        mutate {
+          remove_field => ["@version"]
+        }
       }
       output {
         elasticsearch {
-          hosts => ["elasticsearch:9200"]
+          hosts => ["http://elasticsearch:9200"]
           index => "banking-logs-%{+YYYY.MM.dd}"
         }
         stdout {
@@ -545,57 +560,37 @@ elk:
       elasticsearch.requestTimeout: 30000
       logging.verbose: false
       xpack.security.enabled: false
-  loki:
+
+# ===== Grafana =====
+grafana:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: grafana/grafana
+    tag: "10.4.0"
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 3000
+  adminUser: admin
+  adminPassword: admin
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "50m"
+    limits:
+      memory: "256Mi"
+      cpu: "200m"
+  persistence:
     enabled: true
-    replicaCount: 1
-    image:
-      tag: "latest"
-    service:
-      type: ClusterIP
-      port: 3100
-    resources:
-      requests:
-        memory: "128Mi"
-        cpu: "50m"
-      limits:
-        memory: "256Mi"
-        cpu: "100m"
-    config: |
-      auth_enabled: false
-      server:
-        http_listen_port: 3100
-      ingester:
-        lifecycler:
-          address: 127.0.0.1
-          ring:
-            kvstore:
-              store: inmemory
-            replication_factor: 1
-          final_sleep: 0s
-        chunk_idle_period: 5m
-        chunk_retain_period: 30s
-      schema_config:
-        configs:
-          - from: 2020-10-24
-            store: boltdb-shipper
-            object_store: filesystem
-            schema: v11
-            index:
-              prefix: index_
-              period: 168h
-      storage_config:
-        boltdb_shipper:
-          active_index_directory: /loki/boltdb-shipper-active
-          cache_location: /loki/boltdb-shipper-cache
-          shared_store: filesystem
-        filesystem:
-          directory: /loki/chunks
-      compactor:
-        working_directory: /loki/boltdb-shipper
-        enabled: true
-        retension_enabled: true
-      limits_config:
-        reject_old_samples: true
-        reject_old_samples_max_age: 168h
-      analytics:
-        reporting_enabled: false
+    size: 1Gi
+  datasources:
+    datasources.yaml:
+      apiVersion: 1
+      datasources:
+        - name: Prometheus
+          uid: prometheus
+          type: prometheus
+          access: proxy
+          url: http://prometheus:9090
+          isDefault: true

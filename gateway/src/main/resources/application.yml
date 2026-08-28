@@ -61,6 +61,12 @@ management:
       show-components: always
     prometheus:
       enabled: true
-
-zipkin:
-  base-url: http://zipkin:9411
+  zipkin:
+    tracing:
+      endpoint: ${ZIPKIN_ENDPOINT:http://zipkin:9411/api/v2/spans}
+  metrics:
+    distribution:
+      percentiles-histogram:
+        http:
+          server:
+            requests: true

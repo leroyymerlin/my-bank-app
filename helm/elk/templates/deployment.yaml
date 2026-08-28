@@ -1,12 +1,13 @@
+{{- if .Values.elasticsearch.enabled }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {{ .Release.Name }}-elasticsearch
-  namespace: {{ .Values.global.namespace | default "my-bank-app" }}
+  namespace: {{ .Release.Namespace | default "my-bank-app" }}
   labels:
     app: elasticsearch
 spec:
-  replicas: {{ .Values.elk.elasticsearch.replicaCount }}
+  replicas: {{ .Values.elasticsearch.replicaCount }}
   selector:
     matchLabels:
       app: elasticsearch
@@ -17,25 +18,25 @@ spec:
     spec:
       containers:
         - name: elasticsearch
-          image: "elasticsearch:{{ .Values.elk.elasticsearch.image.tag | default "8.13.0" }}"
-          imagePullPolicy: {{ .Values.global.imagePullPolicy | default "IfNotPresent" }}
+          image: "elasticsearch:{{ .Values.elasticsearch.image.tag | default "8.13.0" }}"
+          imagePullPolicy: {{ .Values.imagePullPolicy | default "IfNotPresent" }}
           env:
             - name: discovery.type
               value: "single-node"
             - name: xpack.security.enabled
               value: "false"
             - name: ES_JAVA_OPTS
-              value: "-Xms{{ .Values.elk.elasticsearch.resources.requests.memory }} -Xmx{{ .Values.elk.elasticsearch.resources.limits.memory }}"
+              value: "-Xms{{ .Values.elasticsearch.resources.requests.memory }} -Xmx{{ .Values.elasticsearch.resources.limits.memory }}"
           ports:
             - containerPort: 9200
               name: http
           resources:
             requests:
-              memory: {{ .Values.elk.elasticsearch.resources.requests.memory }}
-              cpu: {{ .Values.elk.elasticsearch.resources.requests.cpu }}
+              memory: {{ .Values.elasticsearch.resources.requests.memory }}
+              cpu: {{ .Values.elasticsearch.resources.requests.cpu }}
             limits:
-              memory: {{ .Values.elk.elasticsearch.resources.limits.memory }}
-              cpu: {{ .Values.elk.elasticsearch.resources.limits.cpu }}
+              memory: {{ .Values.elasticsearch.resources.limits.memory }}
+              cpu: {{ .Values.elasticsearch.resources.limits.cpu }}
           volumeMounts:
             - name: data
               mountPath: /usr/share/elasticsearch/data
@@ -54,49 +55,51 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: {{ .Release.Name }}-elasticsearch-config
-  namespace: {{ .Values.global.namespace | default "my-bank-app" }}
+  namespace: {{ .Release.Namespace | default "my-bank-app" }}
 data:
   elasticsearch.yml: |
-{{ .Values.elk.elasticsearch.config | toYaml | indent 4 }}
+{{ .Values.elasticsearch.config | nindent 4 }}
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: {{ .Release.Name }}-elasticsearch-pvc
-  namespace: {{ .Values.global.namespace | default "my-bank-app" }}
+  namespace: {{ .Release.Namespace | default "my-bank-app" }}
 spec:
   accessModes:
     - ReadWriteOnce
   resources:
     requests:
-      storage: {{ .Values.elk.elasticsearch.persistence.size }}
+      storage: {{ .Values.elasticsearch.persistence.size }}
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: elasticsearch
-  namespace: {{ .Values.global.namespace | default "my-bank-app" }}
+  namespace: {{ .Release.Namespace | default "my-bank-app" }}
   labels:
     app: elasticsearch
 spec:
-  type: {{ .Values.elk.elasticsearch.service.type }}
+  type: {{ .Values.elasticsearch.service.type }}
   ports:
-    - port: {{ .Values.elk.elasticsearch.service.port }}
+    - port: {{ .Values.elasticsearch.service.port }}
       targetPort: 9200
       protocol: TCP
       name: http
   selector:
     app: elasticsearch
+{{- end }}
 ---
+{{- if .Values.logstash.enabled }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {{ .Release.Name }}-logstash
-  namespace: {{ .Values.global.namespace | default "my-bank-app" }}
+  namespace: {{ .Release.Namespace | default "my-bank-app" }}
   labels:
     app: logstash
 spec:
-  replicas: {{ .Values.elk.logstash.replicaCount }}
+  replicas: {{ .Values.logstash.replicaCount }}
   selector:
     matchLabels:
       app: logstash
@@ -107,8 +110,8 @@ spec:
     spec:
       containers:
         - name: logstash
-          image: "logstash:{{ .Values.elk.logstash.image.tag | default "8.13.0" }}"
-          imagePullPolicy: {{ .Values.global.imagePullPolicy | default "IfNotPresent" }}
+          image: "logstash:{{ .Values.logstash.image.tag | default "8.13.0" }}"
+          imagePullPolicy: {{ .Values.imagePullPolicy | default "IfNotPresent" }}
           ports:
             - containerPort: 5000
               name: tcp
@@ -118,11 +121,11 @@ spec:
               name: beats
           resources:
             requests:
-              memory: {{ .Values.elk.logstash.resources.requests.memory }}
-              cpu: {{ .Values.elk.logstash.resources.requests.cpu }}
+              memory: {{ .Values.logstash.resources.requests.memory }}
+              cpu: {{ .Values.logstash.resources.requests.cpu }}
             limits:
-              memory: {{ .Values.elk.logstash.resources.limits.memory }}
-              cpu: {{ .Values.elk.logstash.resources.limits.cpu }}
+              memory: {{ .Values.logstash.resources.limits.memory }}
+              cpu: {{ .Values.logstash.resources.limits.cpu }}
           volumeMounts:
             - name: config
               mountPath: /usr/share/logstash/config/logstash.yml
@@ -142,54 +145,50 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: {{ .Release.Name }}-logstash-config
-  namespace: {{ .Values.global.namespace | default "my-bank-app" }}
+  namespace: {{ .Release.Namespace | default "my-bank-app" }}
 data:
   logstash.yml: |
-{{ .Values.elk.logstash.config | toYaml | indent 4 }}
+{{ .Values.logstash.config | nindent 4 }}
 ---
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: {{ .Release.Name }}-logstash-pipeline
-  namespace: {{ .Values.global.namespace | default "my-bank-app" }}
+  namespace: {{ .Release.Namespace | default "my-bank-app" }}
 data:
   logstash.conf: |
-{{ .Values.elk.logstash.pipeline | toYaml | indent 4 }}
+{{ .Values.logstash.pipeline | nindent 4 }}
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: logstash
-  namespace: {{ .Values.global.namespace | default "my-bank-app" }}
+  namespace: {{ .Release.Namespace | default "my-bank-app" }}
   labels:
     app: logstash
 spec:
-  type: {{ .Values.elk.logstash.service.type }}
+  type: {{ .Values.logstash.service.type }}
   ports:
-    - port: 5000
-      targetPort: 5000
-      protocol: TCP
-      name: tcp
-    - port: 5001
-      targetPort: 5001
-      protocol: UDP
-      name: udp
-    - port: 5044
-      targetPort: 5044
-      protocol: TCP
-      name: beats
+    {{- range .Values.logstash.service.ports }}
+    - port: {{ .port }}
+      targetPort: {{ .targetPort }}
+      protocol: {{ .protocol }}
+      name: {{ .name }}
+    {{- end }}
   selector:
     app: logstash
+{{- end }}
 ---
+{{- if .Values.kibana.enabled }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {{ .Release.Name }}-kibana
-  namespace: {{ .Values.global.namespace | default "my-bank-app" }}
+  namespace: {{ .Release.Namespace | default "my-bank-app" }}
   labels:
     app: kibana
 spec:
-  replicas: {{ .Values.elk.kibana.replicaCount }}
+  replicas: {{ .Values.kibana.replicaCount }}
   selector:
     matchLabels:
       app: kibana
@@ -200,8 +199,8 @@ spec:
     spec:
       containers:
         - name: kibana
-          image: "kibana:{{ .Values.elk.kibana.image.tag | default "8.13.0" }}"
-          imagePullPolicy: {{ .Values.global.imagePullPolicy | default "IfNotPresent" }}
+          image: "kibana:{{ .Values.kibana.image.tag | default "8.13.0" }}"
+          imagePullPolicy: {{ .Values.imagePullPolicy | default "IfNotPresent" }}
           env:
             - name: ELASTICSEARCH_HOSTS
               value: "http://elasticsearch:9200"
@@ -210,11 +209,11 @@ spec:
               name: http
           resources:
             requests:
-              memory: {{ .Values.elk.kibana.resources.requests.memory }}
-              cpu: {{ .Values.elk.kibana.resources.requests.cpu }}
+              memory: {{ .Values.kibana.resources.requests.memory }}
+              cpu: {{ .Values.kibana.resources.requests.cpu }}
             limits:
-              memory: {{ .Values.elk.kibana.resources.limits.memory }}
-              cpu: {{ .Values.elk.kibana.resources.limits.cpu }}
+              memory: {{ .Values.kibana.resources.limits.memory }}
+              cpu: {{ .Values.kibana.resources.limits.cpu }}
           volumeMounts:
             - name: config
               mountPath: /usr/share/kibana/config/kibana.yml
@@ -228,92 +227,25 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: {{ .Release.Name }}-kibana-config
-  namespace: {{ .Values.global.namespace | default "my-bank-app" }}
+  namespace: {{ .Release.Namespace | default "my-bank-app" }}
 data:
   kibana.yml: |
-{{ .Values.elk.kibana.config | toYaml | indent 4 }}
+{{ .Values.kibana.config | nindent 4 }}
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: kibana
-  namespace: {{ .Values.global.namespace | default "my-bank-app" }}
+  namespace: {{ .Release.Namespace | default "my-bank-app" }}
   labels:
     app: kibana
 spec:
-  type: {{ .Values.elk.kibana.service.type }}
+  type: {{ .Values.kibana.service.type }}
   ports:
-    - port: {{ .Values.elk.kibana.service.port }}
+    - port: {{ .Values.kibana.service.port }}
       targetPort: 5601
       protocol: TCP
       name: http
   selector:
     app: kibana
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: {{ .Release.Name }}-loki
-  namespace: {{ .Values.global.namespace | default "my-bank-app" }}
-  labels:
-    app: loki
-spec:
-  replicas: {{ .Values.elk.loki.replicaCount }}
-  selector:
-    matchLabels:
-      app: loki
-  template:
-    metadata:
-      labels:
-        app: loki
-    spec:
-      containers:
-        - name: loki
-          image: "grafana/loki:{{ .Values.elk.loki.image.tag | default "latest" }}"
-          imagePullPolicy: {{ .Values.global.imagePullPolicy | default "IfNotPresent" }}
-          args:
-            - "-config.file=/etc/loki/local-config.yaml"
-          ports:
-            - containerPort: 3100
-              name: http
-          resources:
-            requests:
-              memory: {{ .Values.elk.loki.resources.requests.memory }}
-              cpu: {{ .Values.elk.loki.resources.requests.cpu }}
-            limits:
-              memory: {{ .Values.elk.loki.resources.limits.memory }}
-              cpu: {{ .Values.elk.loki.resources.limits.cpu }}
-          volumeMounts:
-            - name: config
-              mountPath: /etc/loki/local-config.yaml
-              subPath: loki-config.yaml
-      volumes:
-        - name: config
-          configMap:
-            name: {{ .Release.Name }}-loki-config
----
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: {{ .Release.Name }}-loki-config
-  namespace: {{ .Values.global.namespace | default "my-bank-app" }}
-data:
-  loki-config.yaml: |
-{{ .Values.elk.loki.config | toYaml | indent 4 }}
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: loki
-  namespace: {{ .Values.global.namespace | default "my-bank-app" }}
-  labels:
-    app: loki
-spec:
-  type: {{ .Values.elk.loki.service.type }}
-  ports:
-    - port: {{ .Values.elk.loki.service.port }}
-      targetPort: 3100
-      protocol: TCP
-      name: http
-  selector:
-    app: loki
+{{- end }}

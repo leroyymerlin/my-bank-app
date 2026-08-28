@@ -3,7 +3,6 @@ package ru.yandex.practicum.service;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
-import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -15,13 +14,13 @@ public class ProcessedEventsStorage {
 
     private static final int MAX_CACHE_SIZE = 100_000;
 
-    public synchronized boolean tryMarkAsProcessed(String eventId) {
+    public synchronized void tryMarkAsProcessed(String eventId) {
         if (eventId == null || eventId.isBlank()) {
-            return false;
+            return;
         }
 
         if (processedEventIds.contains(eventId)) {
-            return true;
+            return;
         }
 
         if (processedEventIds.size() >= MAX_CACHE_SIZE) {
@@ -29,7 +28,6 @@ public class ProcessedEventsStorage {
         }
 
         processedEventIds.add(eventId);
-        return false;
     }
 
     public synchronized void clear() {
@@ -37,10 +35,9 @@ public class ProcessedEventsStorage {
     }
 
     public synchronized boolean contains(String eventId) {
+        if (eventId == null) {
+            return false;
+        }
         return processedEventIds.contains(eventId);
-    }
-
-    public synchronized int size() {
-        return processedEventIds.size();
     }
 }

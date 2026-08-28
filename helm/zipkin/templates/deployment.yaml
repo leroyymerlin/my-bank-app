@@ -2,11 +2,11 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {{ .Release.Name }}-zipkin
-  namespace: {{ .Values.global.namespace | default "my-bank-app" }}
+  namespace: {{ .Release.Namespace | default "my-bank-app" }}
   labels:
     app: zipkin
 spec:
-  replicas: {{ .Values.zipkin.replicaCount }}
+  replicas: {{ .Values.replicaCount }}
   selector:
     matchLabels:
       app: zipkin
@@ -17,15 +17,15 @@ spec:
     spec:
       containers:
         - name: zipkin
-          image: "{{ .Values.global.imagePullPolicy | default "IfNotPresent" }}"
-          imagePullPolicy: {{ .Values.global.imagePullPolicy | default "IfNotPresent" }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default "latest" }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy | default "IfNotPresent" }}
           ports:
             - containerPort: 9411
               name: http
           resources:
             requests:
-              memory: {{ .Values.zipkin.resources.requests.memory }}
-              cpu: {{ .Values.zipkin.resources.requests.cpu }}
+              memory: {{ .Values.resources.requests.memory }}
+              cpu: {{ .Values.resources.requests.cpu }}
             limits:
-              memory: {{ .Values.zipkin.resources.limits.memory }}
-              cpu: {{ .Values.zipkin.resources.limits.cpu }}
+              memory: {{ .Values.resources.limits.memory }}
+              cpu: {{ .Values.resources.limits.cpu }}

@@ -14,7 +14,6 @@ spring:
       value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
       properties:
         spring.json.trusted.packages: "*"
-        interceptor.classes: ru.yandex.practicum.config.TracingKafkaConsumerInterceptor
       enable-auto-commit: false
 
   security:
@@ -50,6 +49,12 @@ management:
       show-components: always
     prometheus:
       enabled: true
-
-zipkin:
-  base-url: http://zipkin:9411
+  zipkin:
+    tracing:
+      endpoint: ${ZIPKIN_ENDPOINT:http://zipkin:9411/api/v2/spans}
+  metrics:
+    distribution:
+      percentiles-histogram:
+        http:
+          server:
+            requests: true

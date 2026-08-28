@@ -35,7 +35,7 @@ spec:
             - name: SPRING_CLOUD_GATEWAY_ROUTES_3_URI
               value: http://{{ .Release.Name }}-notifications:8085
             - name: SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI
-              value: {{ .Values.global.keycloak.issuerUri | default "http://{{ .Release.Name }}-keycloak:8080/realms/myrealm" }}
+              value: {{ .Values.global.keycloak.issuerUri | default (printf "http://%s-keycloak:8080/realms/myrealm" .Release.Name) }}
           livenessProbe:
             httpGet:
               path: /actuator/health/liveness

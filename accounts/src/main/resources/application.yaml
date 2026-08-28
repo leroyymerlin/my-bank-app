@@ -30,8 +30,6 @@ spring:
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
       acks: all
       retries: 3
-      properties:
-        interceptor.classes: ru.yandex.practicum.config.TracingKafkaProducerInterceptor
 
   security:
     oauth2:
@@ -81,9 +79,15 @@ management:
       show-components: always
     prometheus:
       enabled: true
-
-zipkin:
-  base-url: http://zipkin:9411
+  zipkin:
+    tracing:
+      endpoint: ${ZIPKIN_ENDPOINT:http://zipkin:9411/api/v2/spans}
+  metrics:
+    distribution:
+      percentiles-histogram:
+        http:
+          server:
+            requests: true
 
 # Configuration для retry обновления баланса
 balance:

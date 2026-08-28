@@ -1,6 +1,7 @@
 package ru.yandex.practicum.config;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -53,6 +54,9 @@ public class KafkaConsumerConfig {
         configProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, JsonDeserializer.class);
         configProps.put(JsonDeserializer.TRUSTED_PACKAGES, "ru.yandex.practicum.event");
         configProps.put(JsonDeserializer.VALUE_DEFAULT_TYPE, NotificationEvent.class);
+        configProps.put(ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG,
+                List.of(TracingKafkaConsumerInterceptor.class.getName()));
+
         return new DefaultKafkaConsumerFactory<>(configProps);
     }
 
@@ -65,6 +69,9 @@ public class KafkaConsumerConfig {
         configProps.put("acks", "all");
         configProps.put("retries", 3);
         configProps.put("enable.idempotence", true);
+        configProps.put(ProducerConfig.INTERCEPTOR_CLASSES_CONFIG,
+                List.of(TracingKafkaProducerInterceptor.class.getName()));
+
         return new DefaultKafkaProducerFactory<>(configProps);
     }
 
@@ -207,4 +214,5 @@ public class KafkaConsumerConfig {
                         String.valueOf(RETENTION_MS))
                 .build();
     }
+
 }

@@ -1,14 +1,6 @@
-# ===== Zipkin =====
-zipkin:
-  enabled: true
-  replicaCount: 1
-  service:
-    type: ClusterIP
-    port: 9411
-  resources:
-    requests:
-      memory: "256Mi"
-      cpu: "125m"
-    limits:
-      memory: "1Gi"
-      cpu: "500m"
+apiVersion: v2
+name: zipkin
+description: Helm chart for Zipkin distributed tracing
+type: application
+version: 0.1.0
+appVersion: "2.27"

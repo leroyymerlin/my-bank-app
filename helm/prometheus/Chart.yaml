@@ -7,5 +7,5 @@ appVersion: "2.51.0"
 dependencies:
   - name: alertmanager
     version: 1.0.0
-    repository: file://./alertmanager
+    repository: file://../alertmanager
     condition: alertmanager.enabled

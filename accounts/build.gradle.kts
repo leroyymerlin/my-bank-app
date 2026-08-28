@@ -54,6 +54,19 @@ dependencies {
 
 }
 
+val unitTest by tasks.creating(Test::class) {
+    description = "Runs unit tests"
+    group = "verification"
+    
+    testClassesDirs = sourceSets["test"].output.classesDirs
+    classpath = sourceSets["test"].runtimeClasspath
+}
+
 tasks.test {
-    useJUnitPlatform()
+    useJUnitPlatform {
+    }
+}
+
+tasks.check {
+    dependsOn(unitTest, tasks.test)
 }

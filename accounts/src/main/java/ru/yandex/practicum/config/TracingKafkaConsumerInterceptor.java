@@ -1,9 +1,13 @@
 package ru.yandex.practicum.config;
 
 import brave.propagation.CurrentTraceContext;
+import brave.propagation.TraceContext;
+import io.micrometer.tracing.Tracer;
 import org.apache.kafka.clients.consumer.ConsumerInterceptor;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 import org.slf4j.Logger;
@@ -17,7 +21,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
 @Component
-public class TracingKafkaConsumerInterceptor<K, V> implements ConsumerInterceptor<K, V>, ApplicationContextAware {
+public class TracingKafkaConsumerInterceptor<K, V>
+        implements ConsumerInterceptor<K, V>, ApplicationContextAware {
 
     private static final Logger log = LoggerFactory.getLogger(TracingKafkaConsumerInterceptor.class);
 
@@ -26,18 +31,16 @@ public class TracingKafkaConsumerInterceptor<K, V> implements ConsumerIntercepto
     private static final String PARENT_SPAN_ID_HEADER = "X-B3-ParentSpanId";
     private static final String SAMPLED_HEADER = "X-B3-Sampled";
 
-    private static boolean tracingEnabled = false;
-    private static CurrentTraceContext currentTraceContext;
+    private static volatile CurrentTraceContext currentTraceContext;
+    private final ThreadLocal<CurrentTraceContext.Scope> scopeHolder = new ThreadLocal<>();
 
     @Override
     public void setApplicationContext(ApplicationContext ctx) throws BeansException {
         try {
             currentTraceContext = ctx.getBean(CurrentTraceContext.class);
-            tracingEnabled = true;
         } catch (BeansException e) {
-            tracingEnabled = false;
             if (log.isTraceEnabled()) {
-                log.trace("CurrentTraceContext not available, tracing disabled for Kafka consumer interceptor: {}", e.getMessage());
+                log.trace("CurrentTraceContext not available: {}", e.getMessage());
             }
         }
     }
@@ -48,53 +51,99 @@ public class TracingKafkaConsumerInterceptor<K, V> implements ConsumerIntercepto
 
     @Override
     public ConsumerRecords<K, V> onConsume(ConsumerRecords<K, V> records) {
-        if (!tracingEnabled || currentTraceContext == null) {
+        if (records.isEmpty() || currentTraceContext == null) {
             return records;
         }
 
         for (ConsumerRecord<K, V> record : records) {
-            extractAndSetTraceContext(record.headers());
+            TraceContext traceContext = extractTraceContext(record.headers());
+            if (traceContext == null) {
+                continue;
+            }
+
+            try {
+                CurrentTraceContext.Scope scope = currentTraceContext.newScope(traceContext);
+                scopeHolder.set(scope);
+
+                if (log.isDebugEnabled()) {
+                    log.debug("Restored B3 tracing context for Kafka batch: topic={}, partition={}, " +
+                                    "offset={}, traceId={}, spanId={}",
+                            record.topic(), record.partition(), record.offset(),
+                            traceContext.traceIdString(), traceContext.spanIdString());
+                }
+                break;
+            } catch (Exception e) {
+                log.warn("Failed to create tracing scope for Kafka batch: topic={}, error={}",
+                        record.topic(), e.getMessage());
+            }
         }
+
         return records;
     }
 
-    private void extractAndSetTraceContext(Headers headers) {
-        String traceIdStr = extractHeaderValue(headers, TRACE_ID_HEADER);
-        String spanIdStr = extractHeaderValue(headers, SPAN_ID_HEADER);
-        String parentSpanIdStr = extractHeaderValue(headers, PARENT_SPAN_ID_HEADER);
-
-        if (traceIdStr != null) {
+    @Override
+    public void onCommit(Map<TopicPartition, OffsetAndMetadata> offsets) {
+        CurrentTraceContext.Scope scope = scopeHolder.get();
+        if (scope != null) {
             try {
-                long traceIdLong = Long.parseUnsignedLong(traceIdStr, 16);
-                long spanIdLong = spanIdStr != null ? Long.parseUnsignedLong(spanIdStr, 16) : traceIdLong;
-                long parentSpanIdLong = parentSpanIdStr != null ? Long.parseUnsignedLong(parentSpanIdStr, 16) : 0L;
-                boolean sampled = "1".equals(extractHeaderValue(headers, SAMPLED_HEADER));
-
-                brave.propagation.TraceContext traceContext = brave.propagation.TraceContext.newBuilder()
-                        .traceId(traceIdLong)
-                        .spanId(spanIdLong)
-                        .parentId(parentSpanIdLong)
-                        .sampled(sampled)
-                        .build();
-
-                CurrentTraceContext.Scope scope = currentTraceContext.newScope(traceContext);
                 scope.close();
-
-                if (log.isDebugEnabled()) {
-                    log.debug("Extracted B3 tracing context from Kafka record: traceId={}", traceIdStr);
-                }
             } catch (Exception e) {
-                log.warn("Failed to extract B3 tracing context from Kafka record: {}", e.getMessage());
+                log.warn("Failed to close tracing scope: {}", e.getMessage());
+            } finally {
+                scopeHolder.remove();
             }
         }
     }
 
     @Override
-    public void onCommit(Map<org.apache.kafka.common.TopicPartition, org.apache.kafka.clients.consumer.OffsetAndMetadata> offsets) {
+    public void close() {
+        CurrentTraceContext.Scope scope = scopeHolder.get();
+        if (scope != null) {
+            try {
+                scope.close();
+            } catch (Exception e) {
+                log.warn("Failed to close tracing scope on interceptor close: {}", e.getMessage());
+            }
+            scopeHolder.remove();
+        }
     }
 
-    @Override
-    public void close() {
+    private TraceContext extractTraceContext(Headers headers) {
+        String traceIdStr = extractHeaderValue(headers, TRACE_ID_HEADER);
+        if (traceIdStr == null) {
+            return null;
+        }
+
+        try {
+            long traceId = Long.parseUnsignedLong(traceIdStr);
+            TraceContext.Builder builder = TraceContext.newBuilder().traceId(traceId);
+
+            String spanIdStr = extractHeaderValue(headers, SPAN_ID_HEADER);
+            if (spanIdStr != null) {
+                builder.spanId(Long.parseUnsignedLong(spanIdStr));
+            }
+
+            String parentSpanIdStr = extractHeaderValue(headers, PARENT_SPAN_ID_HEADER);
+            if (parentSpanIdStr != null) {
+                builder.parentId(Long.parseUnsignedLong(parentSpanIdStr));
+            }
+
+            String sampledStr = extractHeaderValue(headers, SAMPLED_HEADER);
+            if ("1".equals(sampledStr)) {
+                builder.sampled(true);
+            } else if ("0".equals(sampledStr)) {
+                builder.sampled(false);
+            }
+
+            return builder.build();
+        } catch (IllegalArgumentException e) {
+            log.warn("128-bit trace ID not supported by current Brave version: traceId={}", traceIdStr);
+            return null;
+        } catch (Exception e) {
+            log.warn("Failed to extract B3 tracing context from Kafka record: traceId={}, error={}",
+                    traceIdStr, e.getMessage());
+            return null;
+        }
     }
 
     private String extractHeaderValue(Headers headers, String key) {

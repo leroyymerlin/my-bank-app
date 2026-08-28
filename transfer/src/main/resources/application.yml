@@ -12,8 +12,6 @@ spring:
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
       acks: all
       retries: 3
-      properties:
-        interceptor.classes: ru.yandex.practicum.config.TracingKafkaProducerInterceptor
     consumer:
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
@@ -68,6 +66,12 @@ management:
       show-components: always
     prometheus:
       enabled: true
-
-zipkin:
-  base-url: http://zipkin:9411
+  zipkin:
+    tracing:
+      endpoint: ${ZIPKIN_ENDPOINT:http://zipkin:9411/api/v2/spans}
+  metrics:
+    distribution:
+      percentiles-histogram:
+        http:
+          server:
+            requests: true

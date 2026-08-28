@@ -32,13 +32,10 @@ public class BalanceUpdateService {
 
     private static final BigDecimal MAX_BALANCE_DEC = new BigDecimal(1_000_000_000);
 
-    /**
-     * Обновление баланса в отдельной транзакции с retry.
-     *
-     */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     @Retryable(
             retryFor = {OptimisticLockingFailureException.class, ObjectOptimisticLockingFailureException.class, StaleObjectStateException.class},
+            noRetryFor = IllegalArgumentException.class,
             maxAttemptsExpression = "${balance.update.retries:3}",
             backoff = @Backoff(
                     delayExpression = "${balance.update.backoff.delay:100}",
@@ -68,15 +65,25 @@ public class BalanceUpdateService {
         );
     }
 
-    /**
-     * Recover-метод для обработки окончательной ошибки после всех попыток.
-     * Вызывается Spring Retry, когда все попытки исчерпаны.
-     */
     @Recover
-    public AccountInfoDto recoverFromOptimisticLock(OptimisticLockingFailureException e, String login, BigDecimal delta) {
+    public AccountInfoDto recoverFromOptimisticLock(ObjectOptimisticLockingFailureException e, String login, BigDecimal delta) {
         log.error("Не удалось обновить баланс для '{}', delta={} после всех попыток: {}",
                 login, delta, e.getMessage());
         throw new RuntimeException("Не удалось обновить баланс из-за конкурентного доступа: " + login, e);
+    }
+
+    @Recover
+    public AccountInfoDto recoverFromStaleObject(StaleObjectStateException e, String login, BigDecimal delta) {
+        log.error("Не удалось обновить баланс для '{}', delta={} после всех попыток: {}",
+                login, delta, e.getMessage());
+        throw new RuntimeException("Не удалось обновить баланс из-за конкурентного доступа: " + login, e);
+    }
+
+    @Recover
+    public AccountInfoDto recoverFromBalanceValidation(IllegalArgumentException e, String login, BigDecimal delta) {
+        log.warn("Отклонено обновление баланса для '{}', delta={}: {}",
+                login, delta, e.getMessage());
+        throw new RuntimeException(e);
     }
 
     private void validateBalance(BigDecimal newBalance) {

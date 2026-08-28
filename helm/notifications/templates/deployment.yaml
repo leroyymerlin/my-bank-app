@@ -33,7 +33,7 @@ spec:
             - name: SPRING_DATASOURCE_URL
               value: jdbc:postgresql://{{ .Release.Name }}-{{ .Chart.Name }}-postgresql:5432/notifications_db
             - name: SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI
-              value: {{ .Values.global.keycloak.issuerUri | default "http://{{ .Release.Name }}-keycloak:8080/realms/myrealm" }}
+              value: {{ .Values.global.keycloak.issuerUri | default (printf "http://%s-keycloak:8080/realms/myrealm" .Release.Name) }}
             - name: KAFKA_BOOTSTRAP_SERVERS
               value: "{{ .Release.Name }}-kafka:9092"
           livenessProbe:

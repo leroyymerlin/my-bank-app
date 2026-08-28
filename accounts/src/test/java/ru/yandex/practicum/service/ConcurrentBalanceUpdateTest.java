@@ -12,12 +12,8 @@ import ru.yandex.practicum.repository.AccountRepository;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
+import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -30,8 +26,12 @@ import static org.assertj.core.api.Assertions.assertThat;
                 "spring.datasource.password=",
                 "spring.jpa.hibernate.ddl-auto=create-drop",
                 "spring.jpa.show-sql=true",
-                "spring.kafka.producer.bootstrap-servers=localhost:9092",
-                "spring.kafka.consumer.bootstrap-servers=localhost:9092"
+                "spring.kafka.bootstrap-servers=localhost:9092",
+                "spring.kafka.admin.auto-create=false",
+                "spring.kafka.producer.bootstrap-servers=mock://localhost:9999",
+                "spring.kafka.consumer.bootstrap-servers=mock://localhost:9999",
+                "spring.kafka.listener.auto-startup=false",
+                "management.tracing.enabled=false"
         }
 )
 @ActiveProfiles("test")
@@ -68,33 +68,22 @@ class ConcurrentBalanceUpdateTest {
         BigDecimal expectedFinalBalance = INITIAL_BALANCE.add(
                 UPDATE_AMOUNT.multiply(BigDecimal.valueOf(totalOperations)));
 
-        CountDownLatch startLatch = new CountDownLatch(1);
-        List<Throwable> exceptions = new CopyOnWriteArrayList<>();
-
         ExecutorService executor = Executors.newFixedThreadPool(CONCURRENT_THREADS);
 
-        try {
-            for (int i = 0; i < CONCURRENT_THREADS; i++) {
-                CompletableFuture.runAsync(() -> {
+        List<CompletableFuture<Void>> futures = IntStream.range(0, CONCURRENT_THREADS)
+                .mapToObj(threadIndex -> CompletableFuture.runAsync(() -> {
                     for (int j = 0; j < UPDATES_PER_THREAD; j++) {
-                        try {
-                            startLatch.await(); // ждём синхронного старта
-                            balanceUpdateService.doUpdateBalance(TEST_LOGIN, UPDATE_AMOUNT);
-                        } catch (Throwable e) {
-                            exceptions.add(e);
-                        }
+                        balanceUpdateService.doUpdateBalance(TEST_LOGIN, UPDATE_AMOUNT);
                     }
-                }, executor);
-            }
+                }, executor))
+                .toList();
 
-            startLatch.countDown();
+        CompletableFuture<Void> allDone = CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]));
 
-            Thread.sleep(30_000);
+        try {
+            allDone.get(10, TimeUnit.SECONDS);
+
             Account finalAccount = accountRepository.findByLogin(TEST_LOGIN).orElseThrow();
-
-            assertThat(exceptions)
-                    .as("Не должно быть исключений при успешных обновлениях")
-                    .isEmpty();
 
             assertThat(finalAccount.getBalance())
                     .as("Не должно быть потерянных обновлений. Ожидалось: %s, фактически: %s, версия: %d",
@@ -103,10 +92,10 @@ class ConcurrentBalanceUpdateTest {
 
             assertThat(finalAccount.getVersion())
                     .as("Версия аккаунта должна увеличиться после обновлений")
-                    .isGreaterThan(0L);
+                    .isEqualTo(totalOperations);
         } finally {
             executor.shutdown();
-            executor.awaitTermination(30, TimeUnit.SECONDS);
+            executor.awaitTermination(15, TimeUnit.SECONDS);
         }
     }
 
@@ -114,10 +103,8 @@ class ConcurrentBalanceUpdateTest {
     void concurrentUpdatesWithNegativeDelta_shouldNotGoBelowZero() throws Exception {
         BigDecimal initialBalance = new BigDecimal("500");
         BigDecimal negativeDelta = new BigDecimal("-300");
-        int totalOperations = CONCURRENT_THREADS * UPDATES_PER_THREAD; // 6 операций
 
         accountRepository.deleteAll();
-
         Account account = Account.builder()
                 .login(TEST_LOGIN)
                 .name("Test User")
@@ -127,63 +114,78 @@ class ConcurrentBalanceUpdateTest {
                 .build();
         accountRepository.save(account);
 
-        CountDownLatch startLatch = new CountDownLatch(1);
-        List<Throwable> exceptions = new CopyOnWriteArrayList<>();
-
         ExecutorService executor = Executors.newFixedThreadPool(CONCURRENT_THREADS);
+        int totalOperations = CONCURRENT_THREADS * UPDATES_PER_THREAD;
 
-        try {
-            for (int i = 0; i < CONCURRENT_THREADS; i++) {
-                CompletableFuture.runAsync(() -> {
+        List<CompletableFuture<String>> operationResults = IntStream.range(0, CONCURRENT_THREADS)
+                .mapToObj(threadIndex -> CompletableFuture.supplyAsync(() -> {
+                    StringBuilder result = new StringBuilder();
                     for (int j = 0; j < UPDATES_PER_THREAD; j++) {
                         try {
-                            startLatch.await(); // ждём синхронного старта
                             balanceUpdateService.doUpdateBalance(TEST_LOGIN, negativeDelta);
-                        } catch (Throwable e) {
-                            exceptions.add(e);
+                            result.append("success;");
+                        } catch (RuntimeException e) {
+                            Class<?> exceptionType = (e.getCause() != null) ? e.getCause().getClass() : e.getClass();
+                            result.append("failed:|").append(exceptionType.getSimpleName()).append(";");
                         }
                     }
-                }, executor);
+                    return result.toString();
+                }, executor))
+                .toList();
+
+        CompletableFuture.allOf(operationResults.toArray(new CompletableFuture[0]))
+                .get(30, TimeUnit.SECONDS);
+
+        int successCount = 0;
+        int failureCount = 0;
+        boolean hasValidationOrLockException = false;
+
+        for (CompletableFuture<String> future : operationResults) {
+            String result = future.join();
+            String[] operations = result.split(";");
+            for (String op : operations) {
+                if (op.isBlank()) continue;
+                if (op.equals("success")) {
+                    successCount++;
+                } else if (op.startsWith("failed:")) {
+                    failureCount++;
+                    String exceptionType = op.substring("failed:".length());
+                    if (exceptionType.contains("IllegalArgumentException") || exceptionType.contains("OptimisticLockException")) {
+                        hasValidationOrLockException = true;
+                    }
+                }
             }
-
-            startLatch.countDown();
-
-            Thread.sleep(30_000);
-
-            Account finalAccount = accountRepository.findByLogin(TEST_LOGIN).orElseThrow();
-            BigDecimal actualBalance = finalAccount.getBalance();
-
-            assertThat(actualBalance)
-                    .as("Баланс не должен быть отрицательным")
-                    .isGreaterThanOrEqualTo(BigDecimal.ZERO);
-
-            int successCount = totalOperations - exceptions.size();
-            assertThat(successCount)
-                    .as("Количество успешно завершённых операций (общее - failed с исключениями)")
-                    .isGreaterThanOrEqualTo(0);
-
-            if (!exceptions.isEmpty()) {
-                long incorrectArgCount = exceptions.stream()
-                        .filter(e -> e instanceof IllegalArgumentException
-                                || (e.getCause() instanceof IllegalArgumentException))
-                        .count();
-
-                assertThat(incorrectArgCount)
-                        .as("Исключения должны быть IllegalArgumentException (недостаточно средств), " +
-                                "получено исключений: %d", exceptions.size());
-            }
-
-            BigDecimal totalDeducted = negativeDelta.multiply(BigDecimal.valueOf(successCount));
-            BigDecimal expectedBalance = initialBalance.add(totalDeducted);
-            assertThat(actualBalance)
-                    .as("Финальный баланс должен равняться начальному минус успешные списания. " +
-                            "Ожидалось: %s, фактически: %s, успешно: %d, неудач: %d",
-                            expectedBalance, actualBalance, successCount, exceptions.size())
-                    .isEqualByComparingTo(expectedBalance);
-
-        } finally {
-            executor.shutdown();
-            executor.awaitTermination(30, TimeUnit.SECONDS);
         }
+
+        assertThat(successCount)
+                .as("Должны быть успешные операции. Успешных: %d, неудачных: %d", successCount, failureCount)
+                .isGreaterThan(0);
+        assertThat(failureCount)
+                .as("Должны быть неудачные операции (баланс < 0 или оптимистичная блокировка). Успешных: %d, неудачных: %d", successCount, failureCount)
+                .isGreaterThan(0);
+        assertThat(successCount + failureCount)
+                .as("Общее число операций: %d, фактических: %d", totalOperations, successCount + failureCount)
+                .isEqualTo(totalOperations);
+        assertThat(hasValidationOrLockException)
+                .as("Неудачные операции должны бросать IllegalArgumentException или OptimisticLockException")
+                .isTrue();
+
+        Account finalAccount = accountRepository.findByLogin(TEST_LOGIN).orElseThrow();
+        BigDecimal actualBalance = finalAccount.getBalance();
+
+        assertThat(actualBalance)
+                .as("Баланс не должен быть отрицательным")
+                .isGreaterThanOrEqualTo(BigDecimal.ZERO);
+
+        BigDecimal expectedBalance = initialBalance.add(
+                negativeDelta.multiply(BigDecimal.valueOf(successCount)));
+
+        assertThat(actualBalance)
+                .as("Финальный баланс: начальный=%s, успешных=%d, ожидалось=%s, фактически=%s",
+                        initialBalance, successCount, expectedBalance, actualBalance)
+                .isEqualByComparingTo(expectedBalance);
+
+        executor.shutdown();
+        executor.awaitTermination(15, TimeUnit.SECONDS);
     }
 }

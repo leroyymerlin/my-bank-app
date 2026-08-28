@@ -1,0 +1,19 @@
+# ===== Zipkin =====
+replicaCount: 1
+
+image:
+  repository: openzipkin/zipkin-slim
+  tag: latest
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 9411
+
+resources:
+  requests:
+    memory: "256Mi"
+    cpu: "125m"
+  limits:
+    memory: "1Gi"
+    cpu: "500m"
