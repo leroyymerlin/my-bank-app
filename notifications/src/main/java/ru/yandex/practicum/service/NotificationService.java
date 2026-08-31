@@ -91,8 +91,21 @@ public class NotificationService {
             topics = "${kafka.dlt.name:notifications-service.dlt}",
             containerFactory = "dltListenerContainerFactory"
     )
-    public void handleDlt(String key, String payload, Acknowledgment ack) {
-        log.error("Сообщение попало в DLT. key={}, payload={}", key, payload);
+    public void handleDlt(
+            @Payload String payload,
+            @Header(KafkaHeaders.RECEIVED_TOPIC) String topic,
+            @Header(KafkaHeaders.OFFSET) Long offset,
+            @Header(KafkaHeaders.PARTITION) Integer partition,
+            @Header("X-Error-Type") String errorType,
+            @Header("X-Error-Message") String errorMessage,
+            @Header("X-Original-Topic") String originalTopic,
+            @Header("X-Original-Partition") String originalPartition,
+            @Header("X-Original-Offset") String originalOffset,
+            Acknowledgment ack) {
+
+        log.error("Сообщение попало в DLT. topic={}, partition={}, offset={}, "
+                        + "originalTopic={}, errorType={}, errorMessage={}, payload={}",
+                topic, partition, offset, originalTopic, errorType, errorMessage, payload);
         ack.acknowledge();
     }
 }

@@ -66,24 +66,10 @@ public class BalanceUpdateService {
     }
 
     @Recover
-    public AccountInfoDto recoverFromOptimisticLock(ObjectOptimisticLockingFailureException e, String login, BigDecimal delta) {
+    public AccountInfoDto recoverFromOptimisticLock(OptimisticLockingFailureException e, String login, BigDecimal delta) {
         log.error("Не удалось обновить баланс для '{}', delta={} после всех попыток: {}",
                 login, delta, e.getMessage());
         throw new RuntimeException("Не удалось обновить баланс из-за конкурентного доступа: " + login, e);
-    }
-
-    @Recover
-    public AccountInfoDto recoverFromStaleObject(StaleObjectStateException e, String login, BigDecimal delta) {
-        log.error("Не удалось обновить баланс для '{}', delta={} после всех попыток: {}",
-                login, delta, e.getMessage());
-        throw new RuntimeException("Не удалось обновить баланс из-за конкурентного доступа: " + login, e);
-    }
-
-    @Recover
-    public AccountInfoDto recoverFromBalanceValidation(IllegalArgumentException e, String login, BigDecimal delta) {
-        log.warn("Отклонено обновление баланса для '{}', delta={}: {}",
-                login, delta, e.getMessage());
-        throw new RuntimeException(e);
     }
 
     private void validateBalance(BigDecimal newBalance) {

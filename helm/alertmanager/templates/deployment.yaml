@@ -71,7 +71,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: alertmanager
+  name: {{ .Release.Name }}-alertmanager
   namespace: {{ .Release.Namespace | default "my-bank-app" }}
   labels:
     app: alertmanager

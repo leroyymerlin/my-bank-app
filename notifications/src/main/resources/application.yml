@@ -20,7 +20,7 @@ spring:
     oauth2:
       resourceserver:
         jwt:
-          issuer-uri: http://localhost:8080/auth/realms/myrealm   # URL Keycloak
+          issuer-uri: ${OAUTH2_RESOURCESERVER_JWT_ISSUER_URI:http://keycloak:8080/realms/myrealm}
 
 kafka:
   dlt:

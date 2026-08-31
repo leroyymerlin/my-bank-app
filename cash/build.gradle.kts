@@ -14,6 +14,7 @@ repositories {
 dependencies {
 
     implementation(project(":notification-contract"))
+    implementation(project(":tracing-common"))
     implementation("org.projectlombok:lombok")
     annotationProcessor("org.projectlombok:lombok")
 

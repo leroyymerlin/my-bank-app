@@ -423,11 +423,11 @@ alertmanager:
     receivers:
       - name: 'default-receiver'
         webhook_configs:
-          - url: 'http://localhost:5001/webhook'
+          - url: '${WEBHOOK_URL:http://webhook-receiver:5001/webhook}'
             send_resolved: true
       - name: 'critical-receiver'
         webhook_configs:
-          - url: 'http://localhost:5001/webhook'
+          - url: '${WEBHOOK_URL:http://webhook-receiver:5001/webhook}'
             send_resolved: true
     inhibit_rules:
       - source_match:

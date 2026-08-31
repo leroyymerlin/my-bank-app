@@ -152,7 +152,9 @@ class NotificationServiceTest {
     void handleDlt_shouldLogAndAck() {
         Acknowledgment ack = org.mockito.Mockito.mock(Acknowledgment.class);
 
-        assertThatCode(() -> notificationService.handleDlt("test-key", "test-payload", ack))
+        assertThatCode(() -> notificationService.handleDlt(
+                "test-payload", "dlt-topic", 0L, 0, "DeserializationException",
+                "error message", "original-topic", "0", "0", ack))
                 .doesNotThrowAnyException();
 
         org.mockito.Mockito.verify(ack).acknowledge();

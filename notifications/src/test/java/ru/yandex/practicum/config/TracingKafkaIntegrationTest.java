@@ -2,12 +2,12 @@ package ru.yandex.practicum.config;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-
 import brave.propagation.CurrentTraceContext;
 import brave.propagation.TraceContext;
 
@@ -23,6 +23,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 class TracingKafkaIntegrationTest {
 
     @Autowired
+    private TracingKafkaConsumerInterceptor<String, String> consumerInterceptor;
+
+    @Autowired
     private brave.Tracer braveTracer;
 
     @Autowired
@@ -30,9 +33,6 @@ class TracingKafkaIntegrationTest {
 
     @Autowired
     private TracingKafkaProducerInterceptor<String, String> producerInterceptor;
-
-    @Autowired
-    private TracingKafkaConsumerInterceptor<String, String> consumerInterceptor;
 
     @Test
     void shouldAddB3HeadersToProducerRecord() {
@@ -90,7 +90,7 @@ class TracingKafkaIntegrationTest {
 
             consumerInterceptor.onCommit(Map.of(
                     new TopicPartition("test-topic", 0),
-                    new org.apache.kafka.clients.consumer.OffsetAndMetadata(1L)));
+                    new OffsetAndMetadata(1L)));
         } finally {
             originalScope.close();
         }

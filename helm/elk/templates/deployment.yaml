@@ -26,7 +26,7 @@ spec:
             - name: xpack.security.enabled
               value: "false"
             - name: ES_JAVA_OPTS
-              value: "-Xms{{ .Values.elasticsearch.resources.requests.memory }} -Xmx{{ .Values.elasticsearch.resources.limits.memory }}"
+              value: "-Xms{{ .Values.elasticsearch.resources.requests.memory | replace "Mi" "m" | replace "Gi" "g" }} -Xmx{{ .Values.elasticsearch.resources.limits.memory | replace "Mi" "m" | replace "Gi" "g" }}"
           ports:
             - containerPort: 9200
               name: http

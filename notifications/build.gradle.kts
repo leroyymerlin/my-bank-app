@@ -20,6 +20,7 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-oauth2-resource-server")
     implementation("org.springframework.kafka:spring-kafka")
     implementation(project(":notification-contract"))
+    implementation(project(":tracing-common"))
 
     implementation("io.micrometer:micrometer-tracing-bridge-brave")
     implementation("io.zipkin.reporter2:zipkin-reporter-brave")
@@ -49,7 +50,6 @@ val unitTest by tasks.creating(Test::class) {
 
 tasks.test {
     useJUnitPlatform {
-        // All tests run here including integration
     }
 }
 

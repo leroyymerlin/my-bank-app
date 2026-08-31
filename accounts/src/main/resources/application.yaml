@@ -6,9 +6,9 @@ spring:
     name: accounts-service
 
   datasource:
-    url: jdbc:postgresql://localhost:5432/accounts_db
-    username: postgres
-    password: postgres
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/accounts_db}
+    username: ${SPRING_DATASOURCE_USERNAME:postgres}
+    password: ${SPRING_DATASOURCE_PASSWORD:postgres}
     driver-class-name: org.postgresql.Driver
 
   jpa:
@@ -35,21 +35,21 @@ spring:
     oauth2:
       resourceserver:
         jwt:
-          issuer-uri: http://localhost:8080/auth/realms/myrealm
+          issuer-uri: ${OAUTH2_RESOURCESERVER_JWT_ISSUER_URI:http://keycloak:8080/realms/myrealm}
       client:
         registration:
           notification-client:
-            client-id: accounts-client
-            client-secret: your-client-secret
+            client-id: ${OAUTH2_CLIENT_REGISTRATION_NOTIFICATION_CLIENT_CLIENT_ID:accounts-client}
+            client-secret: ${OAUTH2_CLIENT_REGISTRATION_NOTIFICATION_CLIENT_CLIENT_SECRET:change-me}
             authorization-grant-type: client_credentials
             scope: notification
         provider:
           notification-client:
-            token-uri: http://localhost:8080/auth/realms/myrealm/protocol/openid-connect/token
+            token-uri: ${OAUTH2_CLIENT_REGISTRATION_NOTIFICATION_CLIENT_TOKEN_URI:http://keycloak:8080/realms/myrealm/protocol/openid-connect/token}
 
 notification:
   service:
-    url: http://localhost:8081
+    url: ${NOTIFICATION_SERVICE_URL:http://notifications:8085}
 
 logging:
   level:
@@ -89,7 +89,6 @@ management:
           server:
             requests: true
 
-# Configuration для retry обновления баланса
 balance:
   update:
     retries: 3
