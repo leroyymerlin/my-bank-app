@@ -1,31 +1,36 @@
-apiVersion: v2
-generated: "2026-08-22T00:00:00Z"
 dependencies:
-  - name: kafka
-    version: 1.0.0
-    repository: file://./kafka
-    condition: kafka.enabled
-  - name: accounts
-    version: 1.0.0
-    repository: file://./accounts
-    condition: accounts.enabled
-  - name: cash
-    version: 1.0.0
-    repository: file://./cash
-    condition: cash.enabled
-  - name: transfer
-    version: 1.0.0
-    repository: file://./transfer
-    condition: transfer.enabled
-  - name: notifications
-    version: 1.0.0
-    repository: file://./notifications
-    condition: notifications.enabled
-  - name: gateway
-    version: 1.0.0
-    repository: file://./gateway
-    condition: gateway.enabled
-  - name: front
-    version: 1.0.0
-    repository: file://./front
-    condition: front.enabled
+- name: kafka
+  repository: file://./kafka
+  version: 1.0.0
+- name: accounts
+  repository: file://./accounts
+  version: 1.0.0
+- name: cash
+  repository: file://./cash
+  version: 1.0.0
+- name: transfer
+  repository: file://./transfer
+  version: 1.0.0
+- name: notifications
+  repository: file://./notifications
+  version: 1.0.0
+- name: gateway
+  repository: file://./gateway
+  version: 1.0.0
+- name: front
+  repository: file://./front
+  version: 1.0.0
+- name: zipkin
+  repository: file://./zipkin
+  version: 0.1.0
+- name: prometheus
+  repository: file://./prometheus
+  version: 1.0.0
+- name: elk
+  repository: file://./elk
+  version: 1.0.0
+- name: grafana
+  repository: file://./grafana
+  version: 1.0.0
+digest: sha256:276d8a08b0e96ce40f3489f14767ff08bab3fbf76ec7d7b7c7aacf2b40cf7080
+generated: "2026-08-26T23:00:00.000000+03:00"

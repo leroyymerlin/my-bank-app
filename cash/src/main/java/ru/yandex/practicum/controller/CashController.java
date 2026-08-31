@@ -34,6 +34,9 @@ public class CashController {
     }
 
     private String extractLogin(Authentication authentication) {
+        if (authentication == null) {
+            return "anonymous";
+        }
         if (authentication.getPrincipal() instanceof Jwt jwt) {
             String login = jwt.getClaim("preferred_username");
             if (login == null) {

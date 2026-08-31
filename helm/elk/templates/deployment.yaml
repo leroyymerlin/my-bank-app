@@ -1,0 +1,251 @@
+{{- if .Values.elasticsearch.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-elasticsearch
+  namespace: {{ .Release.Namespace | default "my-bank-app" }}
+  labels:
+    app: elasticsearch
+spec:
+  replicas: {{ .Values.elasticsearch.replicaCount }}
+  selector:
+    matchLabels:
+      app: elasticsearch
+  template:
+    metadata:
+      labels:
+        app: elasticsearch
+    spec:
+      containers:
+        - name: elasticsearch
+          image: "elasticsearch:{{ .Values.elasticsearch.image.tag | default "8.13.0" }}"
+          imagePullPolicy: {{ .Values.imagePullPolicy | default "IfNotPresent" }}
+          env:
+            - name: discovery.type
+              value: "single-node"
+            - name: xpack.security.enabled
+              value: "false"
+            - name: ES_JAVA_OPTS
+              value: "-Xms{{ .Values.elasticsearch.resources.requests.memory | replace "Mi" "m" | replace "Gi" "g" }} -Xmx{{ .Values.elasticsearch.resources.limits.memory | replace "Mi" "m" | replace "Gi" "g" }}"
+          ports:
+            - containerPort: 9200
+              name: http
+          resources:
+            requests:
+              memory: {{ .Values.elasticsearch.resources.requests.memory }}
+              cpu: {{ .Values.elasticsearch.resources.requests.cpu }}
+            limits:
+              memory: {{ .Values.elasticsearch.resources.limits.memory }}
+              cpu: {{ .Values.elasticsearch.resources.limits.cpu }}
+          volumeMounts:
+            - name: data
+              mountPath: /usr/share/elasticsearch/data
+            - name: config
+              mountPath: /usr/share/elasticsearch/config/elasticsearch.yml
+              subPath: elasticsearch.yml
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ .Release.Name }}-elasticsearch-pvc
+        - name: config
+          configMap:
+            name: {{ .Release.Name }}-elasticsearch-config
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-elasticsearch-config
+  namespace: {{ .Release.Namespace | default "my-bank-app" }}
+data:
+  elasticsearch.yml: |
+{{ .Values.elasticsearch.config | nindent 4 }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ .Release.Name }}-elasticsearch-pvc
+  namespace: {{ .Release.Namespace | default "my-bank-app" }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.elasticsearch.persistence.size }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: elasticsearch
+  namespace: {{ .Release.Namespace | default "my-bank-app" }}
+  labels:
+    app: elasticsearch
+spec:
+  type: {{ .Values.elasticsearch.service.type }}
+  ports:
+    - port: {{ .Values.elasticsearch.service.port }}
+      targetPort: 9200
+      protocol: TCP
+      name: http
+  selector:
+    app: elasticsearch
+{{- end }}
+---
+{{- if .Values.logstash.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-logstash
+  namespace: {{ .Release.Namespace | default "my-bank-app" }}
+  labels:
+    app: logstash
+spec:
+  replicas: {{ .Values.logstash.replicaCount }}
+  selector:
+    matchLabels:
+      app: logstash
+  template:
+    metadata:
+      labels:
+        app: logstash
+    spec:
+      containers:
+        - name: logstash
+          image: "logstash:{{ .Values.logstash.image.tag | default "8.13.0" }}"
+          imagePullPolicy: {{ .Values.imagePullPolicy | default "IfNotPresent" }}
+          ports:
+            - containerPort: 5000
+              name: tcp
+            - containerPort: 5001
+              name: udp
+            - containerPort: 5044
+              name: beats
+          resources:
+            requests:
+              memory: {{ .Values.logstash.resources.requests.memory }}
+              cpu: {{ .Values.logstash.resources.requests.cpu }}
+            limits:
+              memory: {{ .Values.logstash.resources.limits.memory }}
+              cpu: {{ .Values.logstash.resources.limits.cpu }}
+          volumeMounts:
+            - name: config
+              mountPath: /usr/share/logstash/config/logstash.yml
+              subPath: logstash.yml
+            - name: pipeline
+              mountPath: /usr/share/logstash/pipeline/logstash.conf
+              subPath: logstash.conf
+      volumes:
+        - name: config
+          configMap:
+            name: {{ .Release.Name }}-logstash-config
+        - name: pipeline
+          configMap:
+            name: {{ .Release.Name }}-logstash-pipeline
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-logstash-config
+  namespace: {{ .Release.Namespace | default "my-bank-app" }}
+data:
+  logstash.yml: |
+{{ .Values.logstash.config | nindent 4 }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-logstash-pipeline
+  namespace: {{ .Release.Namespace | default "my-bank-app" }}
+data:
+  logstash.conf: |
+{{ .Values.logstash.pipeline | nindent 4 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: logstash
+  namespace: {{ .Release.Namespace | default "my-bank-app" }}
+  labels:
+    app: logstash
+spec:
+  type: {{ .Values.logstash.service.type }}
+  ports:
+    {{- range .Values.logstash.service.ports }}
+    - port: {{ .port }}
+      targetPort: {{ .targetPort }}
+      protocol: {{ .protocol }}
+      name: {{ .name }}
+    {{- end }}
+  selector:
+    app: logstash
+{{- end }}
+---
+{{- if .Values.kibana.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-kibana
+  namespace: {{ .Release.Namespace | default "my-bank-app" }}
+  labels:
+    app: kibana
+spec:
+  replicas: {{ .Values.kibana.replicaCount }}
+  selector:
+    matchLabels:
+      app: kibana
+  template:
+    metadata:
+      labels:
+        app: kibana
+    spec:
+      containers:
+        - name: kibana
+          image: "kibana:{{ .Values.kibana.image.tag | default "8.13.0" }}"
+          imagePullPolicy: {{ .Values.imagePullPolicy | default "IfNotPresent" }}
+          env:
+            - name: ELASTICSEARCH_HOSTS
+              value: "http://elasticsearch:9200"
+          ports:
+            - containerPort: 5601
+              name: http
+          resources:
+            requests:
+              memory: {{ .Values.kibana.resources.requests.memory }}
+              cpu: {{ .Values.kibana.resources.requests.cpu }}
+            limits:
+              memory: {{ .Values.kibana.resources.limits.memory }}
+              cpu: {{ .Values.kibana.resources.limits.cpu }}
+          volumeMounts:
+            - name: config
+              mountPath: /usr/share/kibana/config/kibana.yml
+              subPath: kibana.yml
+      volumes:
+        - name: config
+          configMap:
+            name: {{ .Release.Name }}-kibana-config
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-kibana-config
+  namespace: {{ .Release.Namespace | default "my-bank-app" }}
+data:
+  kibana.yml: |
+{{ .Values.kibana.config | nindent 4 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kibana
+  namespace: {{ .Release.Namespace | default "my-bank-app" }}
+  labels:
+    app: kibana
+spec:
+  type: {{ .Values.kibana.service.type }}
+  ports:
+    - port: {{ .Values.kibana.service.port }}
+      targetPort: 5601
+      protocol: TCP
+      name: http
+  selector:
+    app: kibana
+{{- end }}

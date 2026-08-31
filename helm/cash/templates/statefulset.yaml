@@ -32,6 +32,7 @@ spec:
   selector:
     matchLabels:
       app: postgresql
+      component: {{ .Chart.Name }}
   template:
     metadata:
       labels:

@@ -1,5 +1,8 @@
 package ru.yandex.practicum.service;
 
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -9,6 +12,7 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.SendResult;
 import ru.yandex.practicum.client.AccountClient;
 import ru.yandex.practicum.dto.AccountInfoDto;
+import ru.yandex.practicum.event.NotificationEvent;
 import ru.yandex.practicum.model.CashAction;
 
 import java.math.BigDecimal;
@@ -27,10 +31,19 @@ class CashServiceTest {
     private AccountClient accountClient;
 
     @Mock
-    private KafkaTemplate<String, Object> kafkaTemplate;
+    private KafkaTemplate<String, NotificationEvent> kafkaTemplate;
+
+    private final SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
 
     @InjectMocks
     private CashService cashService;
+
+    @BeforeEach
+    void setUp() {
+        // Inject meterRegistry into cashService
+        cashService = new CashService(accountClient, kafkaTemplate, meterRegistry);
+        meterRegistry.clear();
+    }
 
     private static final String TEST_LOGIN = "testuser";
     private static final BigDecimal TEST_AMOUNT = new BigDecimal("500.00");
@@ -43,7 +56,7 @@ class CashServiceTest {
         AccountInfoDto expected = new AccountInfoDto("Иванов Иван", "1990-01-01", expectedBalance);
         when(accountClient.changeBalance(eq(TEST_LOGIN), eq(delta))).thenReturn(expected);
 
-        CompletableFuture<SendResult<String, Object>> future = new CompletableFuture<>();
+        CompletableFuture<SendResult<String, NotificationEvent>> future = new CompletableFuture<>();
         future.complete(new SendResult<>(null, null));
         when(kafkaTemplate.send(anyString(), anyString(), any())).thenReturn(future);
 
@@ -61,7 +74,7 @@ class CashServiceTest {
         AccountInfoDto expected = new AccountInfoDto("Иванов Иван", "1990-01-01", expectedBalance);
         when(accountClient.changeBalance(eq(TEST_LOGIN), eq(delta))).thenReturn(expected);
 
-        CompletableFuture<SendResult<String, Object>> future = new CompletableFuture<>();
+        CompletableFuture<SendResult<String, NotificationEvent>> future = new CompletableFuture<>();
         future.complete(new SendResult<>(null, null));
         when(kafkaTemplate.send(anyString(), anyString(), any())).thenReturn(future);
 
@@ -98,6 +111,15 @@ class CashServiceTest {
 
         verify(accountClient, times(1)).changeBalance(eq(TEST_LOGIN), eq(TEST_AMOUNT));
         verify(kafkaTemplate, never()).send(anyString(), anyString(), any());
+
+        // Verify failure counter was incremented
+        Counter failureCounter = meterRegistry.find("cash_withdrawal_failures")
+                .tag("login", TEST_LOGIN)
+                .tag("action", "PUT")
+                .tag("reason", "RuntimeException")
+                .counter();
+        assertThat(failureCounter).isNotNull();
+        assertThat(failureCounter.count()).isEqualTo(1);
     }
 
     @Test
@@ -111,5 +133,21 @@ class CashServiceTest {
 
         verify(accountClient, never()).changeBalance(login, amount);
         verify(kafkaTemplate, never()).send("cash-notifications", login, null);
+    }
+
+    @Test
+    void processCash_shouldRecordMetrics_onFailure() {
+        when(accountClient.changeBalance(anyString(), any())).thenThrow(new RuntimeException("DB down"));
+
+        assertThatThrownBy(() -> cashService.processCash(TEST_LOGIN, TEST_AMOUNT, CashAction.GET))
+                .isInstanceOf(RuntimeException.class);
+
+        // Verify metrics counter
+        Counter counter = meterRegistry.find("cash_withdrawal_failures")
+                .tag("login", TEST_LOGIN)
+                .tag("action", "GET")
+                .counter();
+        assertThat(counter).isNotNull();
+        assertThat(counter.count()).isEqualTo(1);
     }
 }

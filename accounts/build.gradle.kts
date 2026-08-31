@@ -14,11 +14,13 @@ repositories {
 dependencies {
 
     implementation(project(":notification-contract"))
+    implementation(project(":tracing-common"))
     implementation("org.projectlombok:lombok")
     annotationProcessor("org.projectlombok:lombok")
 
     implementation("org.springframework.boot:spring-boot-starter-web")
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")
+    implementation("org.springframework.boot:spring-boot-starter-actuator")
     implementation("org.springframework.boot:spring-boot-starter-oauth2-resource-server")
     implementation("org.springframework.boot:spring-boot-starter-oauth2-client")
     implementation("org.springframework.boot:spring-boot-starter-webflux")
@@ -27,6 +29,14 @@ dependencies {
     implementation("org.flywaydb:flyway-database-postgresql")
     implementation("org.flywaydb:flyway-core")
     implementation("org.springframework.kafka:spring-kafka")
+
+    implementation("io.micrometer:micrometer-tracing-bridge-brave")
+    implementation("io.zipkin.reporter2:zipkin-reporter-brave")
+    implementation("io.micrometer:micrometer-core")
+
+    implementation("io.micrometer:micrometer-registry-prometheus")
+
+    implementation("net.logstash.logback:logstash-logback-encoder:7.4")
 
     implementation("org.springframework.boot:spring-boot-starter-aop")
     implementation("org.springframework.retry:spring-retry")
@@ -45,6 +55,19 @@ dependencies {
 
 }
 
+val unitTest by tasks.creating(Test::class) {
+    description = "Runs unit tests"
+    group = "verification"
+    
+    testClassesDirs = sourceSets["test"].output.classesDirs
+    classpath = sourceSets["test"].runtimeClasspath
+}
+
 tasks.test {
-    useJUnitPlatform()
+    useJUnitPlatform {
+    }
+}
+
+tasks.check {
+    dependsOn(unitTest, tasks.test)
 }

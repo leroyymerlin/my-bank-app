@@ -1,0 +1,5 @@
+  # Logstash TCP appender for log shipping
+  logstash:
+    host: logstash
+    port: 5000
+    protocol: tcp

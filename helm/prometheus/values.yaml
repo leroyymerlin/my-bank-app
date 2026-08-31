@@ -1,0 +1,188 @@
+# ===== Prometheus =====
+replicaCount: 1
+
+imagePullPolicy: IfNotPresent
+
+image:
+  tag: "v2.51.0"
+
+scrapeInterval: "15s"
+evaluationInterval: "15s"
+scrapeTimeout: "10s"
+retention: "15d"
+
+service:
+  type: ClusterIP
+  port: 9090
+
+resources:
+  requests:
+    memory: "256Mi"
+    cpu: "125m"
+  limits:
+    memory: "1Gi"
+    cpu: "500m"
+
+persistence:
+  size: 5Gi
+
+scrapeTargets:
+  - name: "accounts-service"
+    service: "accounts"
+    port: "8082"
+    metricsPath: "/actuator/prometheus"
+  - name: "cash-service"
+    service: "cash"
+    port: "8083"
+    metricsPath: "/actuator/prometheus"
+  - name: "transfer-service"
+    service: "transfer"
+    port: "8084"
+    metricsPath: "/actuator/prometheus"
+  - name: "notifications-service"
+    service: "notifications"
+    port: "8085"
+    metricsPath: "/actuator/prometheus"
+  - name: "gateway-service"
+    service: "gateway"
+    port: "8081"
+    metricsPath: "/actuator/prometheus"
+  - name: "front-service"
+    service: "front"
+    port: "8080"
+    metricsPath: "/actuator/prometheus"
+
+alertRules: |
+  groups:
+    - name: microservice-alerts
+      rules:
+        - alert: High5xxErrorRate
+          expr: |
+            sum(rate(http_server_requests_seconds_count{status=~"5.."}[5m]))
+            by (service)
+            /
+            sum(rate(http_server_requests_seconds_count[5m]))
+            by (service)
+            > 0.10
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "High 5xx error rate on {{ $labels.service }}"
+            description: "5xx error rate exceeds 10% for 5 minutes on {{ $labels.service }}: {{ $value | humanizePercentage }}"
+
+        - alert: High4xxErrorRate
+          expr: |
+            sum(rate(http_server_requests_seconds_count{status=~"4.."}[5m]))
+            by (service)
+            /
+            sum(rate(http_server_requests_seconds_count[5m]))
+            by (service)
+            > 0.30
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "High 4xx error rate on {{ $labels.service }}"
+            description: "4xx error rate exceeds 30% for 5 minutes on {{ $labels.service }}: {{ $value | humanizePercentage }}"
+
+        - alert: HighRequestLatencyP95
+          expr: |
+            histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket[5m])) by (le, service))
+            > 1.0
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "High p95 latency on {{ $labels.service }}"
+            description: "p95 latency exceeds 1s on {{ $labels.service }}: {{ $value | humanizeDuration }}"
+
+        - alert: HighRequestLatencyP99
+          expr: |
+            histogram_quantile(0.99, sum(rate(http_server_requests_seconds_bucket[5m])) by (le, service))
+            > 3.0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "High p99 latency on {{ $labels.service }}"
+            description: "p99 latency exceeds 3s on {{ $labels.service }}: {{ $value | humanizeDuration }}"
+
+        - alert: ZeroRequestRate
+          expr: |
+            sum(rate(http_server_requests_seconds_count[5m])) by (service) == 0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "No requests to {{ $labels.service }}"
+            description: "Service {{ $labels.service }} is not processing requests for 5 minutes."
+
+        - alert: HighJvmMemoryUsage
+          expr: |
+            jvm_memory_used_bytes{area="heap"} / jvm_memory_max_bytes{area="heap"} > 0.80
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "High JVM memory on {{ $labels.service }}"
+            description: "Heap memory exceeds 80% on {{ $labels.service }}: {{ $value | humanizePercentage }}"
+
+        - alert: CriticalJvmMemoryUsage
+          expr: |
+            jvm_memory_used_bytes{area="heap"} / jvm_memory_max_bytes{area="heap"} > 0.90
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Critical JVM memory on {{ $labels.service }}"
+            description: "Heap memory exceeds 90% on {{ $labels.service }}: {{ $value | humanizePercentage }}"
+
+        - alert: HighFailedCashWithdrawals
+          expr: |
+            sum(increase(cash_withdrawal_failures_total[5m])) by (login, service) > 5
+          for: 2m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Many failed cash withdrawals for {{ $labels.login }}"
+            description: "User {{ $labels.login }} has >5 failed cash withdrawal attempts in 5 minutes on {{ $labels.service }}."
+
+        - alert: HighFailedTransfers
+          expr: |
+            sum(increase(transfer_failures_total[5m])) by (fromLogin, toLogin, service) > 5
+          for: 2m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Many failed transfers {{ $labels.fromLogin }} -> {{ $labels.toLogin }}"
+            description: "Transfers between {{ $labels.fromLogin }} and {{ $labels.toLogin }} failed >5 times in 5 minutes on {{ $labels.service }}."
+
+        - alert: HighFailedNotifications
+          expr: |
+            sum(increase(notification_send_failures_total[5m])) by (login, service) > 5
+          for: 2m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Many failed notifications for {{ $labels.login }}"
+            description: "Failed notification sends for {{ $labels.login }} >5 in 5 minutes on {{ $labels.service }}."
+
+        - alert: ServiceDown
+          expr: up == 0
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Service {{ $labels.instance }} is down"
+            description: "Service {{ $labels.instance }} ({{ $labels.service }}) has been down for 1 minute."
+
+        - alert: HighGcTime
+          expr: |
+            sum(rate(jvm_gc_pause_seconds_sum[5m])) by (service) > 1.0
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "High GC time on {{ $labels.service }}"
+            description: "GC time exceeds 1s/min on {{ $labels.service }}."

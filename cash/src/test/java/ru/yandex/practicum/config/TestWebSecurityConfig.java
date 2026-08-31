@@ -8,13 +8,14 @@ import org.springframework.security.config.annotation.web.configuration.EnableWe
 import org.springframework.security.web.SecurityFilterChain;
 
 @TestConfiguration
-@Primary
 @EnableWebSecurity
 public class TestWebSecurityConfig {
 
     @Bean
+    @Primary
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-        http.authorizeHttpRequests(authz -> authz.anyRequest().permitAll());
+        http
+                .authorizeHttpRequests(authz -> authz.anyRequest().permitAll());
         return http.build();
     }
 }

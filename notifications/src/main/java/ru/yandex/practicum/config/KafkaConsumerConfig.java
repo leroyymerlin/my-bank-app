@@ -1,6 +1,7 @@
 package ru.yandex.practicum.config;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -53,6 +54,9 @@ public class KafkaConsumerConfig {
         configProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, JsonDeserializer.class);
         configProps.put(JsonDeserializer.TRUSTED_PACKAGES, "ru.yandex.practicum.event");
         configProps.put(JsonDeserializer.VALUE_DEFAULT_TYPE, NotificationEvent.class);
+        configProps.put(ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG,
+                List.of(TracingKafkaConsumerInterceptor.class.getName()));
+
         return new DefaultKafkaConsumerFactory<>(configProps);
     }
 
@@ -65,6 +69,9 @@ public class KafkaConsumerConfig {
         configProps.put("acks", "all");
         configProps.put("retries", 3);
         configProps.put("enable.idempotence", true);
+        configProps.put(ProducerConfig.INTERCEPTOR_CLASSES_CONFIG,
+                List.of(TracingKafkaProducerInterceptor.class.getName()));
+
         return new DefaultKafkaProducerFactory<>(configProps);
     }
 
@@ -73,13 +80,13 @@ public class KafkaConsumerConfig {
             ProducerFactory<String, NotificationEvent> producerFactory) {
         return new KafkaTemplate<>(producerFactory);
     }
-
+    
     @Bean
-    public ProducerFactory<String, String> dltProducerFactory() {
+    public ProducerFactory<String, Object> dltProducerFactory() {
         Map<String, Object> configProps = new HashMap<>();
         configProps.put("bootstrap.servers", bootstrapServers);
         configProps.put("key.serializer", StringSerializer.class.getName());
-        configProps.put("value.serializer", StringSerializer.class.getName());
+        configProps.put("value.serializer", JsonSerializer.class.getName());
         configProps.put("acks", "all");
         configProps.put("retries", 3);
         return new DefaultKafkaProducerFactory<>(configProps);
@@ -88,7 +95,7 @@ public class KafkaConsumerConfig {
     @Bean
     public ConcurrentKafkaListenerContainerFactory<String, NotificationEvent> kafkaListenerContainerFactory(
             ConsumerFactory<String, NotificationEvent> consumerFactory,
-            ProducerFactory<String, String> dltProducerFactory) {
+            ProducerFactory<String, Object> dltProducerFactory) {
         ConcurrentKafkaListenerContainerFactory<String, NotificationEvent> factory =
                 new ConcurrentKafkaListenerContainerFactory<>();
         factory.setConsumerFactory(consumerFactory);
@@ -119,24 +126,8 @@ public class KafkaConsumerConfig {
         return factory;
     }
 
-    private DefaultErrorHandler createDefaultErrorHandler(ProducerFactory<String, String> dltProducerFactory) {
-        KafkaTemplate<String, String> kafkaTemplate = new KafkaTemplate<>(dltProducerFactory);
-
-        DeadLetterPublishingRecoverer recoverer = new DeadLetterPublishingRecoverer(
-                kafkaTemplate,
-                (record, exception) -> {
-                    log.error("Message sent to DLT '{}': topic={}, partition={}, offset={}, eventId={}, error={}",
-                            dltTopicName,
-                            record.topic(),
-                            record.partition(),
-                            record.offset(),
-                            extractEventId(record),
-                            exception.getMessage());
-                    return new TopicPartition(dltTopicName, -1);
-                });
-
-        FixedBackOff backOff = new FixedBackOff(1000L, 3);
-        DefaultErrorHandler errorHandler = new DefaultErrorHandler(recoverer, backOff);
+    private DefaultErrorHandler createDefaultErrorHandler(ProducerFactory<String, Object> dltProducerFactory) {
+        DefaultErrorHandler errorHandler = getDefaultErrorHandler(dltProducerFactory);
 
         errorHandler.addRetryableExceptions(
                 org.springframework.dao.DataAccessException.class,
@@ -157,6 +148,29 @@ public class KafkaConsumerConfig {
         return errorHandler;
     }
 
+    private DefaultErrorHandler getDefaultErrorHandler(ProducerFactory<String, Object> dltProducerFactory) {
+        KafkaTemplate<String, Object> kafkaTemplate = new KafkaTemplate<>(dltProducerFactory);
+
+        DeadLetterPublishingRecoverer recoverer = new DeadLetterPublishingRecoverer(
+                kafkaTemplate,
+                (record, exception) -> {
+                    if (exception instanceof org.springframework.kafka.support.serializer.DeserializationException) {
+                        log.error("Message sent to DLT '{}': topic={}, partition={}, offset={}, eventId={}, error={}",
+                                dltTopicName,
+                                record.topic(),
+                                record.partition(),
+                                record.offset(),
+                                extractEventId(record),
+                                exception.getMessage());
+                    }
+
+                    return new TopicPartition(dltTopicName, -1);
+                });
+
+        FixedBackOff backOff = new FixedBackOff(1000L, 3);
+        return new DefaultErrorHandler(recoverer, backOff);
+    }
+
     private String extractEventId(org.apache.kafka.clients.consumer.ConsumerRecord<?, ?> record) {
         if (record.value() instanceof NotificationEvent event) {
             return event.getEventId() != null ? event.getEventId().toString() : "unknown";
@@ -166,8 +180,8 @@ public class KafkaConsumerConfig {
 
     private static final int PARTITIONS = 3;
     private static final short REPLICATION_FACTOR = 1;
-    private static final long RETENTION_MS = 604_800_000L; // 7 days
-
+    private static final long RETENTION_MS = 604_800_000L; 
+    
     @Bean
     public NewTopic accountNotificationsTopic() {
         return TopicBuilder.name("account-notifications")
@@ -207,4 +221,5 @@ public class KafkaConsumerConfig {
                         String.valueOf(RETENTION_MS))
                 .build();
     }
+
 }

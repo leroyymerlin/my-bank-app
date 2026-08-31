@@ -1,0 +1,5 @@
+{
+  "title": "banking-logs-*",
+  "timeFieldName": "@timestamp",
+  "fields": "[{\"name\":\"@timestamp\",\"type\":\"date\",\"searchable\":true,\"aggregatable\":true},{\"name\":\"loglevel\",\"type\":\"string\",\"searchable\":true,\"aggregatable\":true},{\"name\":\"message\",\"type\":\"string\",\"searchable\":true,\"aggregatable\":false},{\"name\":\"service\",\"type\":\"string\",\"searchable\":true,\"aggregatable\":true},{\"name\":\"thread\",\"type\":\"string\",\"searchable\":true,\"aggregatable\":true},{\"name\":\"logger\",\"type\":\"string\",\"searchable\":true,\"aggregatable\":true},{\"name\":\"log_message\",\"type\":\"string\",\"searchable\":true,\"aggregatable\":false}]"
+}

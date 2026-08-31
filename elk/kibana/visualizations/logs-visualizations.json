@@ -1,0 +1,32 @@
+[
+  {
+    "title": "Logs by Level",
+    "visState": "{\"title\":\"Logs by Level\",\"type\":\"pie\",\"params\":{\"mode\":\"combo\",\"colorSchema\":\"Inversions:Blue to Red\",\"colorRange\":{\"min\":0,\"max\":1,\"label\":\"Less:Less,More:More\",\"increasing\":true,\"name\":\"Inversions:Blue to Red\",\"steps\":7},\"trackType\":\"centered\",\"hiddenSlices\":false,\"isDonut\":true,\"labels\":false},\"aggs\":[{\"id\":\"1\",\"type\":\"count\",\"schema\":\"metric\",\"params\":{}},{\"id\":\"2\",\"type\":\"terms\",\"schema\":\"segment\",\"params\":{\"field\":\"loglevel\",\"size\":5,\"order\":\"desc\",\"orderBy\":\"1\"}}],\"listeners\":{}}",
+    "uiStateVis": "{\"title\":\"Logs by Level\",\"showChart\":true,\"showLegend\":true,\"showTable\":false,\"showLegendToggle\":false,\"legendOpen\":false}",
+    "description": "",
+    "version": 1,
+    "kibanaSavedObjectMeta": {
+      "searchSourceJSON": "{\"index\":\"banking-logs-*\",\"query\":{\"match_all\":{}},\"filter\":[]}"
+    }
+  },
+  {
+    "title": "Error Logs Timeline",
+    "visState": "{\"title\":\"Error Logs Timeline\",\"type\":\"histogram\",\"params\":{\"addTimeMarker\":true,\"addLegend\":true,\"addTicks\":\"all\",\"mode\":\"stacked\",\"dropdown\":false,\"duration\":{\"mode\":\"range\",\"value\":{\"min\":0,\"max\":0}},\"xAxisSize\":0,\"timeField\":\"@timestamp\"},\"aggs\":[{\"id\":\"1\",\"type\":\"count\",\"schema\":\"metric\",\"params\":{}},{\"id\":\"2\",\"type\":\"date_histogram\",\"schema\":\"segment\",\"params\":{\"field\":\"@timestamp\",\"interval\":\"auto\",\"customInterval\":\"2h\",\"min_doc_count\":1,\"extended_bounds\":{}}},{\"id\":\"3\",\"type\":\"terms\",\"schema\":\"group\",\"params\":{\"field\":\"loglevel\",\"size\":5,\"order\":\"desc\",\"orderBy\":\"1\"}}],\"listeners\":{}}",
+    "uiStateVis": "{\"title\":\"Error Logs Timeline\",\"showChart\":true,\"showLegend\":true,\"showTable\":false,\"showLegendToggle\":false,\"legendOpen\":false}",
+    "description": "",
+    "version": 1,
+    "kibanaSavedObjectMeta": {
+      "searchSourceJSON": "{\"index\":\"banking-logs-*\",\"query\":{\"bool\":{\"must\":[{\"match\":{\"loglevel\":\"ERROR\"}}]}},\"filter\":[]}"
+    }
+  },
+  {
+    "title": "Logs by Service",
+    "visState": "{\"title\":\"Logs by Service\",\"type\":\"tag_cloud\",\"params\":{\"size\":\"fit\",\"colorScheme\":\"inversionCurve\",\"schemeItemsAvailable\":\"many\",\"schemeReverse\":false,\"field\":\"service\",\"minSize\":0,\" maxSize\":100,\"overrideTitle\":false,\"noneBehavior\":true},\"aggs\":[{\"id\":\"1\",\"type\":\"count\",\"schema\":\"metric\",\"params\":{}},{\"id\":\"2\",\"type\":\"terms\",\"schema\":\"bucket\",\"params\":{\"field\":\"service\",\"size\":10,\"order\":\"desc\",\"orderBy\":\"1\"}}],\"listeners\":{}}",
+    "uiStateVis": "{\"title\":\"Logs by Service\",\"showChart\":true,\"showLegend\":true,\"showTable\":false,\"showLegendToggle\":false,\"legendOpen\":false}",
+    "description": "",
+    "version": 1,
+    "kibanaSavedObjectMeta": {
+      "searchSourceJSON": "{\"index\":\"banking-logs-*\",\"query\":{\"match_all\":{}},\"filter\":[]}"
+    }
+  }
+]

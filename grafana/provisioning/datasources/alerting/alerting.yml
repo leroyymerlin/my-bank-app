@@ -1,0 +1,22 @@
+apiVersion: 1
+
+notificationPolicies:
+  - org_id: 1
+    policies:
+      - matcher:
+          matcher: ".*"
+          path:
+            - "severity"
+            - "warning"
+        receiver:
+          name: "default-receiver"
+        group_by:
+          - "alertname"
+          - "service"
+        continue: false
+
+receivers:
+  - uid: default-receiver
+    name: "default-receiver"
+    settings:
+      addresses: "<alertmanager>:9093"

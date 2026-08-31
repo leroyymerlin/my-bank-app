@@ -1,0 +1,171 @@
+groups:
+  - name: microservice-alerts
+    rules:
+      - alert: High5xxErrorRate
+        expr: |
+          sum(rate(http_server_requests_seconds_count{status=~"5.."}[5m]))
+          by (service)
+          /
+          sum(rate(http_server_requests_seconds_count[5m]))
+          by (service)
+          > 0.10
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Высокий процент 5xx ошибок на {{ $labels.service }}"
+          description: "Процент 5xx ошибок превышает 10% в течение 5 минут на сервисе {{ $labels.service }}. Текущее значение: {{ $value | humanizePercentage }}"
+
+      - alert: High4xxErrorRate
+        expr: |
+          sum(rate(http_server_requests_seconds_count{status=~"4.."}[5m]))
+          by (service)
+          /
+          sum(rate(http_server_requests_seconds_count[5m]))
+          by (service)
+          > 0.30
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Высокий процент 4xx ошибок на {{ $labels.service }}"
+          description: "Процент 4xx ошибок превышает 30% в течение 5 минут на сервисе {{ $labels.service }}. Текущее значение: {{ $value | humanizePercentage }}"
+
+      - alert: HighRequestLatencyP95
+        expr: |
+          histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket[5m])) by (le, service))
+          > 1.0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Высокая p95 задержка на {{ $labels.service }}"
+          description: "p95 задержка превышает 1 сек на сервисе {{ $labels.service }}. Текущее значение: {{ $value | humanizeDuration }}"
+
+      - alert: HighRequestLatencyP99
+        expr: |
+          histogram_quantile(0.99, sum(rate(http_server_requests_seconds_bucket[5m])) by (le, service))
+          > 3.0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Высокая p99 задержка на {{ $labels.service }}"
+          description: "p99 задержка превышает 3 сек на сервисе {{ $labels.service }}. Текущее значение: {{ $value | humanizeDuration }}"
+
+      - alert: ZeroRequestRate
+        expr: |
+          sum(rate(http_server_requests_seconds_count[5m]))
+          by (service)
+          == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Нет запросов к {{ $labels.service }}"
+          description: "Сервис {{ $labels.service }} не обрабатывает запросы в течение 5 минут."
+
+      - alert: HighJvmMemoryUsage
+        expr: |
+          jvm_memory_used_bytes{area="heap"}
+          / jvm_memory_max_bytes{area="heap"}
+          > 0.80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Высокое потребление JVM памяти на {{ $labels.service }}"
+          description: "Потребление heap-памяти превышает 80% на сервисе {{ $labels.service }}. Текущее значение: {{ $value | humanizePercentage }}"
+
+      - alert: CriticalJvmMemoryUsage
+        expr: |
+          jvm_memory_used_bytes{area="heap"}
+          / jvm_memory_max_bytes{area="heap"}
+          > 0.90
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Критическое потребление JVM памяти на {{ $labels.service }}"
+          description: "Потребление heap-памяти превышает 90% на сервисе {{ $labels.service }}. Возможна GC Thrashing или OOM. Текущее значение: {{ $value | humanizePercentage }}"
+
+      - alert: HighFailedCashWithdrawals
+        expr: |
+          sum(rate(cash_withdrawal_failures_total[5m]))
+          by (login, service)
+          > 5
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Много неудачных попыток снятия денег у {{ $labels.login }}"
+          description: "Пользователь {{ $labels.login }} на сервисе {{ $labels.service }} имеет более 5 неудачных попыток снятия денег за 5 минут."
+
+      - alert: HighFailedTransfers
+        expr: |
+          sum(rate(transfer_failures_total[5m]))
+          by (fromLogin, toLogin, service)
+          > 5
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Много неудачных переводов {{ $labels.fromLogin }} -> {{ $labels.toLogin }}"
+          description: "Перевод между {{ $labels.fromLogin }} и {{ $labels.toLogin }} на сервисе {{ $labels.service }} не удаляется более 5 раз за 5 минут."
+
+      - alert: HighFailedNotifications
+        expr: |
+          sum(rate(notification_send_failures_total[5m]))
+          by (login, service)
+          > 5
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Много неудачных отправок уведомлений для {{ $labels.login }}"
+          description: "Неудачные отправки уведомлений для {{ $labels.login }} на сервисе {{ $labels.service }} превышают 5 за 5 минут."
+
+      - alert: ServiceDown
+        expr: up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Сервис {{ $labels.instance }} недоступен"
+          description: "Сервис {{ $labels.instance }} ({{ $labels.service }}) недоступен в течение 1 минуты."
+
+      - alert: HighGcTime
+        expr: |
+          sum(rate(jvm_gc_pause_seconds_sum[5m]))
+          by (service)
+          > 1.0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Высокое время GC на {{ $labels.service }}"
+          description: "Суммарное время GC превышает 1 сек/мин на сервисе {{ $labels.service }}. Это может влиять на производительность."
+
+      - alert: HighThreadUsage
+        expr: |
+          tomcat_threads_busy_threads
+          / tomcat_threads_config_max_threads
+          > 0.80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Высокая загрузка потоков на {{ $labels.service }}"
+          description: "Используется более 80% пула потоков на сервисе {{ $labels.service }}. Возможны очереди запросов."
+
+      - alert: LowAvailableDatabaseConnections
+        expr: |
+          hikaricp_connections_active
+          / hikaricp_connections_config_max
+          > 0.90
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Мало свободных соединений БД на {{ $labels.service }}"
+          description: "Более 90% соединений в пуле HikariCP активно на сервисе {{ $labels.service }}."

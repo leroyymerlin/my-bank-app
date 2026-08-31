@@ -32,13 +32,10 @@ public class BalanceUpdateService {
 
     private static final BigDecimal MAX_BALANCE_DEC = new BigDecimal(1_000_000_000);
 
-    /**
-     * Обновление баланса в отдельной транзакции с retry.
-     *
-     */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     @Retryable(
             retryFor = {OptimisticLockingFailureException.class, ObjectOptimisticLockingFailureException.class, StaleObjectStateException.class},
+            noRetryFor = IllegalArgumentException.class,
             maxAttemptsExpression = "${balance.update.retries:3}",
             backoff = @Backoff(
                     delayExpression = "${balance.update.backoff.delay:100}",
@@ -68,10 +65,6 @@ public class BalanceUpdateService {
         );
     }
 
-    /**
-     * Recover-метод для обработки окончательной ошибки после всех попыток.
-     * Вызывается Spring Retry, когда все попытки исчерпаны.
-     */
     @Recover
     public AccountInfoDto recoverFromOptimisticLock(OptimisticLockingFailureException e, String login, BigDecimal delta) {
         log.error("Не удалось обновить баланс для '{}', delta={} после всех попыток: {}",

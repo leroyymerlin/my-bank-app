@@ -14,17 +14,19 @@ import org.springframework.test.web.servlet.MockMvc;
 import ru.yandex.practicum.dto.AccountInfoDto;
 import ru.yandex.practicum.exception.AccountNotFoundException;
 import ru.yandex.practicum.service.AccountService;
+import ru.yandex.practicum.service.BalanceUpdateService;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
-import java.util.List;
-import java.util.Map;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @WebMvcTest(AccountController.class)
@@ -41,13 +43,16 @@ class AccountControllerTest {
     @MockitoBean
     private AccountService accountService;
 
+    @MockitoBean
+    private BalanceUpdateService balanceUpdateService;
+
     private static final String TEST_LOGIN = "testuser";
     private static final String TEST_NAME = "Иванов Иван";
     private static final LocalDate TEST_BIRTHDATE = LocalDate.of(1990, 1, 1);
     private static final BigDecimal TEST_BALANCE = new BigDecimal("1000.00");
 
-    private org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.JwtRequestPostProcessor createJwtRequestPostProcessor() {
-        return (org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.JwtRequestPostProcessor) jwt();
+    private SecurityMockMvcRequestPostProcessors.JwtRequestPostProcessor createJwtRequestPostProcessor() {
+        return (SecurityMockMvcRequestPostProcessors.JwtRequestPostProcessor) jwt();
     }
 
     @Test
@@ -85,5 +90,35 @@ class AccountControllerTest {
         mockMvc.perform(get("/api/accounts/current")
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().is5xxServerError());
+    }
+
+    @Test
+    @WithMockUser(username = TEST_LOGIN, authorities = "SCOPE_internal")
+    void changeBalance_insufficientFunds_shouldReturn400() throws Exception {
+        when(accountService.updateBalance(anyString(), any()))
+                .thenThrow(new IllegalArgumentException("Недостаточно средств на счёте"));
+
+        mockMvc.perform(post("/api/accounts/balance")
+                        .with(csrf())
+                        .param("login", TEST_LOGIN)
+                        .param("delta", "-2000")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().string("Недостаточно средств на счёте"));
+    }
+
+    @Test
+    @WithMockUser(username = TEST_LOGIN, authorities = "SCOPE_internal")
+    void changeBalance_exceedsMaxLimit_shouldReturn400() throws Exception {
+        when(accountService.updateBalance(anyString(), any()))
+                .thenThrow(new IllegalArgumentException("Превышен максимальный баланс"));
+
+        mockMvc.perform(post("/api/accounts/balance")
+                        .with(csrf())
+                        .param("login", TEST_LOGIN)
+                        .param("delta", "2000000000")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().string("Превышен максимальный баланс"));
     }
 }

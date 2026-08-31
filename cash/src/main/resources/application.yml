@@ -23,27 +23,55 @@ spring:
     oauth2:
       resourceserver:
         jwt:
-          issuer-uri: http://localhost:8080/auth/realms/myrealm
+          issuer-uri: ${OAUTH2_RESOURCESERVER_JWT_ISSUER_URI:http://keycloak:8080/realms/myrealm}
       client:
         registration:
           cash-client:
-            client-id: cash-client
-            client-secret: your-client-secret
+            client-id: ${OAUTH2_CLIENT_REGISTRATION_CASH_CLIENT_CLIENT_ID:cash-client}
+            client-secret: ${OAUTH2_CLIENT_REGISTRATION_CASH_CLIENT_CLIENT_SECRET:change-me}
             authorization-grant-type: client_credentials
             scope: internal
         provider:
           cash-client:
-            token-uri: http://localhost:8080/auth/realms/myrealm/protocol/openid-connect/token
+            token-uri: ${OAUTH2_CLIENT_REGISTRATION_CASH_CLIENT_TOKEN_URI:http://keycloak:8080/realms/myrealm/protocol/openid-connect/token}
 
 account:
   service:
-    url: http://localhost:8082
+    url: ${ACCOUNT_SERVICE_URL:http://accounts:8082}
 
 notification:
   service:
-    url: http://localhost:8085
+    url: ${NOTIFICATION_SERVICE_URL:http://notifications:8085}
 
 logging:
   level:
     org.springframework.security: DEBUG
     org.apache.kafka: DEBUG
+
+management:
+  tracing:
+    enabled: true
+    sampling:
+      probability: 1.0
+  observations:
+    keyvalues:
+      service.name: cash-service
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+      show-components: always
+    prometheus:
+      enabled: true
+  zipkin:
+    tracing:
+      endpoint: ${ZIPKIN_ENDPOINT:http://zipkin:9411/api/v2/spans}
+  metrics:
+    distribution:
+      percentiles-histogram:
+        http:
+          server:
+            requests: true

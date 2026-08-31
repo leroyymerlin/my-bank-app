@@ -1,0 +1,6 @@
+apiVersion: v2
+name: zipkin
+description: Helm chart for Zipkin distributed tracing
+type: application
+version: 0.1.0
+appVersion: "2.27"
